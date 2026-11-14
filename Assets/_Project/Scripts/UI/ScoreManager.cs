@@ -17,7 +17,7 @@ namespace GardenWise
         // 0 to 100
         public float HarvestScore
         {
-            get { return PlantsPlanted == 0 ? 0f : HarvestQualityTotal / PlantsPlanted * 100f; }
+            get { return PlantsPlanted == 0 ? 0f : Mathf.Min(HarvestQualityTotal / PlantsPlanted * 100f, 100f); }
         }
 
         // 0 to 100, tap litres count double
@@ -32,6 +32,7 @@ namespace GardenWise
 
         private void OnEnable()
         {
+            GameEvents.GameStateChanged += HandleGameStateChanged;
             GameEvents.PlantPlanted += HandlePlanted;
             GameEvents.PlantHarvested += HandleHarvested;
             GameEvents.WaterUsed += HandleWaterUsed;
@@ -40,6 +41,7 @@ namespace GardenWise
 
         private void OnDisable()
         {
+            GameEvents.GameStateChanged -= HandleGameStateChanged;
             GameEvents.PlantPlanted -= HandlePlanted;
             GameEvents.PlantHarvested -= HandleHarvested;
             GameEvents.WaterUsed -= HandleWaterUsed;
@@ -61,6 +63,12 @@ namespace GardenWise
             if (HarvestScore >= level.harvestFor3Stars && WaterEfficiency >= level.waterFor3Stars) return 3;
             if (HarvestScore >= level.harvestFor2Stars && WaterEfficiency >= level.waterFor2Stars) return 2;
             return 1;
+        }
+
+        // every level starts with a fresh score
+        private void HandleGameStateChanged(GameState state)
+        {
+            if (state == GameState.LevelIntro) ResetScore();
         }
 
         private void HandlePlanted(Plant plant) { PlantsPlanted++; }

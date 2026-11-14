@@ -17,7 +17,18 @@ namespace GardenWise
         public static SaveData Load()
         {
             if (!File.Exists(FilePath)) return new SaveData();
-            return JsonUtility.FromJson<SaveData>(File.ReadAllText(FilePath));
+
+            // a broken file (game closed while saving...) must not block the game: start again from a new save
+            try
+            {
+                SaveData data = JsonUtility.FromJson<SaveData>(File.ReadAllText(FilePath));
+                if (data != null) return data;
+            }
+            catch (ArgumentException)
+            {
+                Debug.LogWarning("Save file is broken, a new one will be created");
+            }
+            return new SaveData();
         }
 
         public static void Save(SaveData data)
