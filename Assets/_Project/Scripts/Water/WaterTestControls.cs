@@ -66,7 +66,16 @@ namespace GardenWise
             }
 
             game.EndDay();
-            Show("New day: " + WeatherSystem.GetLabel(weather.Today));
+
+            if (game.State == GameState.Results)
+            {
+                string efficiency = score != null ? Mathf.RoundToInt(score.WaterEfficiency) + " %" : "-";
+                Show("Level finished! Water efficiency: " + efficiency + ". Stop and start Play again to restart.");
+            }
+            else
+            {
+                Show("New day: " + WeatherSystem.GetLabel(weather.Today));
+            }
         }
 
         private void Water(WaterSource source)
