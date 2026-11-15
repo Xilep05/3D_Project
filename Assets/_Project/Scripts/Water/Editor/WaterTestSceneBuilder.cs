@@ -195,7 +195,7 @@ namespace GardenWise
             shape.scale = new Vector3(9f, 5f, 0.1f);
 
             ParticleSystemRenderer rainRenderer = rainObject.GetComponent<ParticleSystemRenderer>();
-            rainRenderer.sharedMaterial = AssetDatabase.GetBuiltinExtraResource<Material>("Default-ParticleSystem.mat");
+            rainRenderer.sharedMaterial = GetRainMaterial();
             rainRenderer.renderMode = ParticleSystemRenderMode.Stretch;
             rainRenderer.velocityScale = 0.04f;
             rainRenderer.lengthScale = 1f;
@@ -332,6 +332,20 @@ namespace GardenWise
             }
             material.color = color;
             EditorUtility.SetDirty(material);
+            return material;
+        }
+
+        private static Material GetRainMaterial()
+        {
+            string path = ArtFolder + "/Mat_Rain.mat";
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material != null) return material;
+
+            Shader shader = Shader.Find("Particles/Standard Unlit");
+            if (shader == null) shader = Shader.Find("Sprites/Default");
+            material = new Material(shader);
+            material.color = new Color(0.75f, 0.85f, 1f, 0.8f);
+            AssetDatabase.CreateAsset(material, path);
             return material;
         }
 
