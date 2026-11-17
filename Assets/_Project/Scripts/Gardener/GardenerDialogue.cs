@@ -48,7 +48,8 @@ namespace GardenWise
         [SerializeField] private string onlineConfigFile = "ai_config.json";
         [Tooltip("Seconds to wait for the online model before the local model answers instead.")]
         [SerializeField] private float onlineTimeout = 8f;
-        [Tooltip("After a refusal (daily quota reached, too many requests), the online model is left aside for this long.")]
+        [Tooltip("After a refusal (wrong key, quota reached), the online model is left aside for at most this long " +
+                 "(less when the service says when to try again).")]
         [SerializeField] private float onlinePause = 120f;
 
         // rules and a few examples of style, no list of game commands: the model answers freely from the garden state
@@ -460,9 +461,17 @@ namespace GardenWise
                     response.choices.Length > 0 && response.choices[0].message != null)
                     return response.choices[0].message.content;
 
-                // 401/403: wrong key, 429: quota or too many requests. Leave the service aside for a while
+                // 401/403: wrong key, 429: quota or too many requests. Leave the service aside for a while:
+                // as long as the service asks (Retry-After, often 1 or 2 s for a per-minute limit), else onlinePause
                 long code = request.responseCode;
-                if (code == 401 || code == 403 || code == 429) onlinePausedUntil = Time.realtimeSinceStartup + onlinePause;
+                if (code == 401 || code == 403 || code == 429)
+                {
+                    float wait;
+                    string retryAfter = request.GetResponseHeader("retry-after");
+                    if (code != 429 || !float.TryParse(retryAfter, System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out wait)) wait = onlinePause;
+                    onlinePausedUntil = Time.realtimeSinceStartup + Mathf.Min(wait, onlinePause);
+                }
                 string reason = response != null && response.error != null ? response.error.message : request.error;
                 bool cancelled = onlineRequest != request; // a newer question replaced this one
                 if (!cancelled)

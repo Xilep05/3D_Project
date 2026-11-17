@@ -397,6 +397,8 @@ namespace GardenWise
 
             foreach (string asked in questions)
             {
+                // free online tiers count tokens per minute (Groq: 8000, one question = about 1500): space the questions
+                if (online) await PaceOnlineQuestion();
                 float start = Time.realtimeSinceStartup;
                 float firstWord = -1f;
                 Action<string> onPartial = partial => { if (firstWord < 0f) firstWord = Time.realtimeSinceStartup - start; };
@@ -425,6 +427,7 @@ namespace GardenWise
 
                 foreach (string asked in SecondGardenQuestions)
                 {
+                    if (online) await PaceOnlineQuestion();
                     float start = Time.realtimeSinceStartup;
                     dialogue.Ask(asked);
                     await WaitUntil(() => !dialogue.IsAnswering, 180f);
@@ -692,6 +695,14 @@ namespace GardenWise
             float[] samples = new float[(bytes.Length - 44) / 2];
             for (int i = 0; i < samples.Length; i++) samples[i] = BitConverter.ToInt16(bytes, 44 + i * 2) / 32768f;
             return samples;
+        }
+
+        private static float lastOnlineQuestion = -100f;
+
+        private static async Task PaceOnlineQuestion()
+        {
+            await WaitUntil(() => false, Mathf.Max(0f, lastOnlineQuestion + 16f - Time.realtimeSinceStartup));
+            lastOnlineQuestion = Time.realtimeSinceStartup;
         }
 
         // only the model, with the long list of questions (GARDENER_CHECK=model, or =online for the model of ai_config.json)
