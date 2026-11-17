@@ -1,7 +1,11 @@
 using System;
+using System.Collections;
 using System.IO;
+using System.Text;
+using System.Threading.Tasks;
 using LLMUnity;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace GardenWise
 {
@@ -16,12 +20,14 @@ namespace GardenWise
     {
         LocalModel,
         OfflineTip,
-        Notice
+        Notice,
+        OnlineModel
     }
 
     // owner 5 - the single entry point to talk to Gaston, whatever the input (keyboard, voice...)
     // each question is independent: fresh garden context, no history, no limit
-    // the answer comes from the local model (LLMUnity, no server, no key), or from offline tips when it cannot run
+    // the answer comes, in this order, from an online model (only when ai_config.json is filled in and the internet works),
+    // the local model (LLMUnity, no server, no key), or offline tips when neither can answer
     [DefaultExecutionOrder(-10)] // Awake must run before LLMUnity's components, see Awake
     public class GardenerDialogue : MonoBehaviour
     {
@@ -33,7 +39,17 @@ namespace GardenWise
         [SerializeField] private LLM llm;
         [SerializeField] private LLMAgent agent;
         [Tooltip("GGUF file. Looked for in LLMUnity's models folder (LLMUnitySetup.modelDownloadPath: AppData/Roaming/LLMUnity/models on Windows, ~/.config/LLMUnity/models on macOS), then in StreamingAssets.")]
-        [SerializeField] private string modelFile = "gemma-3-12b-it-Q4_K_M.gguf";
+        [SerializeField] private string modelFile = "gemma-3-4b-it-Q4_K_M.gguf";
+
+        [Header("Online model (first choice when its file is filled in)")]
+        [SerializeField] private bool useOnlineModel = true;
+        [Tooltip("File in StreamingAssets, never in Git: apiUrl, apiKey, model of any OpenAI-compatible service (Groq...). " +
+                 "Copy ai_config.example.json. Missing or not filled in: Gaston uses the local model.")]
+        [SerializeField] private string onlineConfigFile = "ai_config.json";
+        [Tooltip("Seconds to wait for the online model before the local model answers instead.")]
+        [SerializeField] private float onlineTimeout = 8f;
+        [Tooltip("After a refusal (daily quota reached, too many requests), the online model is left aside for this long.")]
+        [SerializeField] private float onlinePause = 120f;
 
         // rules and a few examples of style, no list of game commands: the model answers freely from the garden state
         // (in French like the players; a small model follows examples much better than rules alone)
@@ -85,7 +101,7 @@ namespace GardenWise
         [Tooltip("The reply is cut after this many sentences, whatever the model writes.")]
         [SerializeField] private int maxSentences = 3;
 
-        [Header("Offline tips (when the local model cannot answer)")]
+        [Header("Offline tips (when no model can answer)")]
         [TextArea]
         [SerializeField] private string[] frenchTips =
         {
@@ -118,6 +134,9 @@ namespace GardenWise
         // only for the self-check: stands in for the local model (message, onPartial, onDone)
         public Action<string, Action<string>, Action<string>> TestModel;
 
+        // only for the self-check: stands in for the online model (message, onDone with null when it fails)
+        public Action<string, Action<string>> TestOnline;
+
         public GardenerLanguage Language
         {
             get { return language; }
@@ -134,6 +153,26 @@ namespace GardenWise
         {
             get { return useLocalModel; }
             set { useLocalModel = value; }
+        }
+
+        public bool UseOnlineModel
+        {
+            get { return useOnlineModel; }
+            set { useOnlineModel = value; }
+        }
+
+        // one line for the Console and the tests: is the online model set up?
+        public string OnlineStatus { get; private set; }
+
+        public bool OnlineModelReady
+        {
+            get
+            {
+                if (!useOnlineModel) return false;
+                if (TestOnline != null) return true;
+                return online != null && Time.realtimeSinceStartup >= onlinePausedUntil &&
+                       Application.internetReachability != NetworkReachability.NotReachable;
+            }
         }
 
         public bool LocalModelReady
@@ -153,6 +192,44 @@ namespace GardenWise
         private bool askedLocalModel;
         private int requestId;
         private int nextTip;
+        private OnlineConfig online;
+        private float onlinePausedUntil;
+        private UnityWebRequest onlineRequest;
+
+        // the content of ai_config.json
+        [Serializable]
+        private class OnlineConfig
+        {
+            public string apiUrl;
+            public string apiKey;
+            public string model;
+            public string reasoningEffort; // optional, only for the models that think first (gpt-oss: "low")
+        }
+
+        [Serializable]
+        private class OnlineResponse
+        {
+            public OnlineChoice[] choices;
+            public OnlineError error;
+        }
+
+        [Serializable]
+        private class OnlineChoice
+        {
+            public OnlineMessage message;
+        }
+
+        [Serializable]
+        private class OnlineMessage
+        {
+            public string content;
+        }
+
+        [Serializable]
+        private class OnlineError
+        {
+            public string message;
+        }
 
         // runs before LLMUnity starts: give it the model file, or switch it off when the file is not on this PC
         private void Awake()
@@ -174,6 +251,58 @@ namespace GardenWise
             llm.SetModel(path);
             agent.systemPrompt = instructions;
             ModelStatus = "loading " + modelFile;
+        }
+
+        private void Start()
+        {
+            OnlineStatus = "online model switched off";
+            if (useOnlineModel) StartCoroutine(LoadOnlineConfig());
+        }
+
+        // on Android (Quest) StreamingAssets is inside the package: it can only be read with a web request
+        private IEnumerator LoadOnlineConfig()
+        {
+            string path = Path.Combine(Application.streamingAssetsPath, onlineConfigFile);
+            string json = null;
+
+            if (path.Contains("://"))
+            {
+                using (UnityWebRequest request = UnityWebRequest.Get(path))
+                {
+                    yield return request.SendWebRequest();
+                    if (request.result == UnityWebRequest.Result.Success) json = request.downloadHandler.text;
+                }
+            }
+            else if (File.Exists(path))
+            {
+                json = File.ReadAllText(path);
+            }
+
+            OnlineConfig config = null;
+            try
+            {
+                if (json != null) config = JsonUtility.FromJson<OnlineConfig>(json);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("[Gaston] " + onlineConfigFile + " cannot be read: " + exception.Message);
+            }
+
+            if (config == null || IsBlank(config.apiUrl) || IsBlank(config.apiKey) || IsBlank(config.model))
+            {
+                OnlineStatus = "no online model (" + onlineConfigFile + " missing or not filled in), Gaston uses the local model";
+                if (logToConsole) Debug.Log("[Gaston] " + OnlineStatus);
+                yield break;
+            }
+
+            online = config;
+            OnlineStatus = "online model " + config.model + " (" + new Uri(config.apiUrl).Host + ")";
+            if (logToConsole) Debug.Log("[Gaston] Online model ready: " + OnlineStatus);
+        }
+
+        private static bool IsBlank(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) || value.StartsWith("PASTE_", StringComparison.Ordinal);
         }
 
         private void OnEnable()
@@ -250,8 +379,15 @@ namespace GardenWise
             // a small model forgets the "same language" rule: tell it which one, right before the question
             string answerIn = LooksEnglish(question) ? "Answer in English." : "Réponds en français.";
 
-            if (LocalModelReady) AskLocalModel(context + "\n" + answerIn + "\nQuestion du joueur : " + question, requestId);
-            else GiveOfflineTip(requestId);
+            string message = context + "\n" + answerIn + "\nQuestion du joueur : " + question;
+            if (OnlineModelReady) AskOnlineModel(message, requestId);
+            else AskLocalModelOrTip(message, requestId);
+        }
+
+        private void AskLocalModelOrTip(string message, int id)
+        {
+            if (LocalModelReady) AskLocalModel(message, id);
+            else GiveOfflineTip(id);
         }
 
         // rough guess from very common words, enough to tell English from French
@@ -268,6 +404,118 @@ namespace GardenWise
             }
 
             return score > 0;
+        }
+
+        // the whole reply at once (no streaming): these services answer in about a second
+        private async void AskOnlineModel(string message, int id)
+        {
+            float start = Time.realtimeSinceStartup;
+
+            if (TestOnline != null)
+            {
+                TestOnline(message, text => FinishOnlineAnswer(id, message, text, start));
+                return;
+            }
+
+            string reply = await PostToOnlineModel(message);
+            if (this == null) return;
+            FinishOnlineAnswer(id, message, reply, start);
+        }
+
+        private async Task<string> PostToOnlineModel(string message)
+        {
+            StringBuilder body = new StringBuilder();
+            body.Append("{\"model\":").Append(JsonText(online.model));
+            body.Append(",\"messages\":[{\"role\":\"system\",\"content\":").Append(JsonText(instructions));
+            body.Append("},{\"role\":\"user\",\"content\":").Append(JsonText(message)).Append("}]");
+            body.Append(",\"temperature\":0.4,\"max_tokens\":1024");
+            if (!string.IsNullOrWhiteSpace(online.reasoningEffort)) body.Append(",\"reasoning_effort\":").Append(JsonText(online.reasoningEffort));
+            body.Append('}');
+
+            UnityWebRequest request = new UnityWebRequest(online.apiUrl, "POST");
+            request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body.ToString()));
+            request.downloadHandler = new DownloadHandlerBuffer();
+            request.SetRequestHeader("Content-Type", "application/json");
+            request.SetRequestHeader("Authorization", "Bearer " + online.apiKey);
+            request.timeout = Mathf.Max(1, Mathf.CeilToInt(onlineTimeout));
+            onlineRequest = request;
+
+            try
+            {
+                UnityWebRequestAsyncOperation sending = request.SendWebRequest();
+                while (!sending.isDone) await Task.Yield();
+
+                string text = request.downloadHandler != null ? request.downloadHandler.text : null;
+                OnlineResponse response = null;
+                try
+                {
+                    if (!string.IsNullOrEmpty(text)) response = JsonUtility.FromJson<OnlineResponse>(text);
+                }
+                catch (Exception)
+                {
+                    // not JSON (a proxy page, a cut answer): treated as a failure below
+                }
+
+                if (request.result == UnityWebRequest.Result.Success && response != null && response.choices != null &&
+                    response.choices.Length > 0 && response.choices[0].message != null)
+                    return response.choices[0].message.content;
+
+                // 401/403: wrong key, 429: quota or too many requests. Leave the service aside for a while
+                long code = request.responseCode;
+                if (code == 401 || code == 403 || code == 429) onlinePausedUntil = Time.realtimeSinceStartup + onlinePause;
+                string reason = response != null && response.error != null ? response.error.message : request.error;
+                bool cancelled = onlineRequest != request; // a newer question replaced this one
+                if (!cancelled)
+                    Debug.LogWarning("[Gaston] The online model could not answer (" + code + " " + reason + "), the local model answers instead");
+                return null;
+            }
+            finally
+            {
+                if (onlineRequest == request) onlineRequest = null;
+                request.Dispose();
+            }
+        }
+
+        private void FinishOnlineAnswer(int id, string message, string reply, float start)
+        {
+            if (id != requestId) return;
+
+            bool cut;
+            reply = KeepFirstSentences(RemoveThinking(reply), maxSentences, out cut);
+            if (reply.Length == 0)
+            {
+                // no internet, quota reached, empty answer: the local model takes over, then the tips
+                AskLocalModelOrTip(message, id);
+                return;
+            }
+
+            if (logToConsole)
+                Debug.Log("[Gaston] Online model: " + reply.Length + " characters in " + (Time.realtimeSinceStartup - start).ToString("0.00") + " s");
+
+            Finish(id, reply, GardenerReplySource.OnlineModel);
+        }
+
+        // a C# string as a JSON string, quotes included
+        private static string JsonText(string value)
+        {
+            StringBuilder json = new StringBuilder("\"");
+            foreach (char letter in value ?? "")
+            {
+                switch (letter)
+                {
+                    case '"': json.Append("\\\""); break;
+                    case '\\': json.Append("\\\\"); break;
+                    case '\n': json.Append("\\n"); break;
+                    case '\r': json.Append("\\r"); break;
+                    case '\t': json.Append("\\t"); break;
+                    default:
+                        if (letter < ' ') json.Append("\\u").Append(((int)letter).ToString("x4"));
+                        else json.Append(letter);
+                        break;
+                }
+            }
+
+            return json.Append('"').ToString();
         }
 
         private async void AskLocalModel(string message, int id)
@@ -371,6 +619,9 @@ namespace GardenWise
             IsAnswering = false;
             if (askedLocalModel && TestModel == null && agent != null) agent.CancelRequests();
             askedLocalModel = false;
+            UnityWebRequest pending = onlineRequest;
+            onlineRequest = null;
+            if (pending != null) pending.Abort();
         }
 
         // every level starts with a fresh count, like the ScoreManager

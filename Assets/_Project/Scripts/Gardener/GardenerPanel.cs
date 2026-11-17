@@ -274,13 +274,18 @@ namespace GardenWise
             if (finished) moreArrow.enabled = Mathf.Repeat(Time.unscaledTime, 1f) < 0.5f;
         }
 
-        // the player must always know if the text comes from the local model or from a pre-written tip
+        // the player must always know if the text comes from an AI (online or local) or from a pre-written tip
         private void ShowTag(GardenerReplySource source)
         {
             switch (source)
             {
                 case GardenerReplySource.LocalModel:
                     tagText.text = IsEnglish() ? "Local AI" : "IA locale";
+                    tagBackground.color = AiTagBack;
+                    tagText.color = AiTagText;
+                    break;
+                case GardenerReplySource.OnlineModel:
+                    tagText.text = IsEnglish() ? "Online AI" : "IA en ligne";
                     tagBackground.color = AiTagBack;
                     tagText.color = AiTagText;
                     break;

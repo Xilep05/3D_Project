@@ -108,7 +108,8 @@ namespace GardenWise
 
             try
             {
-                if (only == "model") await CheckModelOnly();
+                if (only == "model") await CheckModelOnly(false);
+                else if (only == "online") await CheckModelOnly(true);
                 else if (only == "voices") await CheckVoice(Object.FindAnyObjectByType<GardenerVoice>(), true);
                 else if (only == "listen") await CheckListening(Object.FindAnyObjectByType<GardenerVoice>());
                 else if (only == "voicelab") await CompareVoiceSettings(Object.FindAnyObjectByType<GardenerVoice>());
@@ -217,6 +218,8 @@ namespace GardenWise
             Check(context.Contains("santé 2/3") && context.Contains("terre trop sèche (22, idéal 50 à 80). À faire : l'arroser"), "the context gives the health of a plant and what its soil needs");
 
             // 3. offline: a typed question, exactly as the Enter key sends it
+            // (the online model, set up or not on this computer, is checked on its own in part 5)
+            dialogue.UseOnlineModel = false;
             dialogue.UseLocalModel = false;
             const string firstQuestion = "Pourquoi ma laitue va mal et quand arroser ?";
             input.text = firstQuestion;
@@ -294,9 +297,43 @@ namespace GardenWise
             Check(!reply.isTextOverflowing && reply.fontSize >= 20f, "a long three-sentence reply fits in the bubble");
             arrow.enabled = true;
             Capture("GardenerSelfCheck_long.png");
-            dialogue.TestModel = null;
 
-            // 5. the real local model
+            // 5. an online model played by the test: first choice, and the local model takes over when it fails
+            string onlineMessage = null;
+            Action<string> onlineDone = null;
+            dialogue.TestOnline = (message, onDone) => { onlineMessage = message; onlineDone = onDone; };
+            dialogue.UseOnlineModel = true;
+            messageSeen = null;
+
+            dialogue.Ask(firstQuestion);
+            Check(onlineMessage != null && onlineMessage.Contains("Laitue") && onlineMessage.EndsWith(firstQuestion) && messageSeen == null,
+                "with an online model set up, it gets the question first (the local model waits)");
+            onlineDone("Ta [vert]laitue[/vert] a soif, arrose-la [or]ce soir[/or] !");
+            panel.SkipTypewriter();
+            Check(lastSource == GardenerReplySource.OnlineModel && tagText.text.Contains("IA en ligne") && reply.GetParsedText() == "Ta laitue a soif, arrose-la ce soir !",
+                "the online reply is shown with its colours, tagged online AI");
+
+            dialogue.Ask("Question sans internet");
+            onlineDone(null);
+            Check(messageSeen != null && messageSeen.EndsWith("Question sans internet") && dialogue.IsAnswering,
+                "when the online model fails, the same question goes to the local model");
+            complete("Réponse du modèle local");
+            panel.SkipTypewriter();
+            Check(lastSource == GardenerReplySource.LocalModel && tagText.text.Contains("IA locale"), "and that reply is tagged local AI");
+
+            dialogue.UseLocalModel = false;
+            dialogue.Ask("Question sans rien");
+            onlineDone("");
+            panel.SkipTypewriter();
+            Check(lastSource == GardenerReplySource.OfflineTip && tagText.text.Contains("Hors ligne"), "with no model at all, an offline tip answers");
+
+            dialogue.UseLocalModel = true;
+            dialogue.TestOnline = null;
+            dialogue.TestModel = null;
+            await CheckOnlineModel(dialogue, panel, () => lastReply, () => lastSource);
+            dialogue.UseOnlineModel = false;
+
+            // 5b. the real local model
             await CheckLocalModel(dialogue, panel, () => lastReply, () => lastSource, false);
 
             // 6. the voice
@@ -315,16 +352,44 @@ namespace GardenWise
             GameEvents.GardenerAsked -= listener;
         }
 
-        // real questions to the real model: the answers are written to Logs/GardenerSelfCheck_llm_<model>.txt
-        private static async Task CheckLocalModel(GardenerDialogue dialogue, GardenerPanel panel, Func<string> lastReply, Func<GardenerReplySource> lastSource, bool manyQuestions)
+        // the online model is optional: checked for real only when ai_config.json is filled in on this computer
+        private static async Task CheckOnlineModel(GardenerDialogue dialogue, GardenerPanel panel, Func<string> lastReply, Func<GardenerReplySource> lastSource)
         {
-            await WaitUntil(() => dialogue.LocalModelReady || dialogue.ModelStatus.Contains("not found") || dialogue.ModelStatus.Contains("failed"), 400f);
-            Check(dialogue.LocalModelReady, "the local model is really loaded (" + dialogue.ModelStatus + ")");
-            if (!dialogue.LocalModelReady) return;
+            await WaitUntil(() => dialogue.OnlineStatus != null && !dialogue.OnlineStatus.Contains("switched off"), 5f);
+            if (!dialogue.OnlineModelReady)
+            {
+                Debug.Log("[SelfCheck] No online model on this computer (" + dialogue.OnlineStatus + "): real online answers not checked");
+                return;
+            }
+
+            dialogue.Ask(FewQuestions[0]);
+            await WaitUntil(() => !dialogue.IsAnswering, 30f);
+            Check(lastSource() == GardenerReplySource.OnlineModel && lastReply().Length > 0,
+                "the real online model answers (" + dialogue.OnlineStatus + "): " + lastReply());
+        }
+
+        // real questions to the real model: the answers are written to Logs/GardenerSelfCheck_llm_<model>.txt
+        // (online = true: to the online model of ai_config.json, Logs/GardenerSelfCheck_online_<model>.txt)
+        private static async Task CheckLocalModel(GardenerDialogue dialogue, GardenerPanel panel, Func<string> lastReply, Func<GardenerReplySource> lastSource,
+            bool manyQuestions, bool online = false)
+        {
+            GardenerReplySource expected = online ? GardenerReplySource.OnlineModel : GardenerReplySource.LocalModel;
+            if (online)
+            {
+                await WaitUntil(() => dialogue.OnlineStatus != null && !dialogue.OnlineStatus.Contains("switched off"), 5f);
+                Check(dialogue.OnlineModelReady, "an online model is set up (" + dialogue.OnlineStatus + ")");
+                if (!dialogue.OnlineModelReady) return;
+            }
+            else
+            {
+                await WaitUntil(() => dialogue.LocalModelReady || dialogue.ModelStatus.Contains("not found") || dialogue.ModelStatus.Contains("failed"), 400f);
+                Check(dialogue.LocalModelReady, "the local model is really loaded (" + dialogue.ModelStatus + ")");
+                if (!dialogue.LocalModelReady) return;
+            }
 
             string[] questions = manyQuestions ? ManyQuestions : FewQuestions;
             StringBuilder transcript = new StringBuilder();
-            transcript.AppendLine("Model: " + dialogue.ModelStatus);
+            transcript.AppendLine("Model: " + (online ? dialogue.OnlineStatus : dialogue.ModelStatus));
             transcript.AppendLine("These answers are what the model wrote during this run. Another run gives other words.");
             transcript.AppendLine();
             int answeredByModel = 0;
@@ -343,7 +408,7 @@ namespace GardenWise
 
                 float seconds = Time.realtimeSinceStartup - start;
                 slowest = Mathf.Max(slowest, seconds);
-                bool fromModel = !dialogue.IsAnswering && lastSource() == GardenerReplySource.LocalModel && lastReply().Length > 0;
+                bool fromModel = !dialogue.IsAnswering && lastSource() == expected && lastReply().Length > 0;
                 if (fromModel) answeredByModel++;
 
                 transcript.AppendLine("Q: " + asked);
@@ -371,12 +436,13 @@ namespace GardenWise
             }
 
             string modelName = Path.GetFileNameWithoutExtension(new SerializedObject(dialogue).FindProperty("modelFile").stringValue);
-            string file = LogFolder + "/GardenerSelfCheck_llm_" + modelName + ".txt";
+            if (online) modelName = dialogue.OnlineStatus.Replace("online model ", "").Split(' ')[0].Replace('/', '_');
+            string file = LogFolder + (online ? "/GardenerSelfCheck_online_" : "/GardenerSelfCheck_llm_") + modelName + ".txt";
             Directory.CreateDirectory(LogFolder);
             File.WriteAllText(file, transcript.ToString(), Encoding.UTF8);
             Debug.Log("[SelfCheck] Model answers saved: " + file + " (slowest answer " + slowest.ToString("0.0") + " s)");
 
-            Check(answeredByModel == questions.Length, "the local model answered " + answeredByModel + " of " + questions.Length + " real questions");
+            Check(answeredByModel == questions.Length, "the " + (online ? "online" : "local") + " model answered " + answeredByModel + " of " + questions.Length + " real questions");
             Check(!lastReply().Contains("<think>"), "the model's hidden reasoning never reaches the player");
 
             panel.SkipTypewriter();
@@ -628,8 +694,8 @@ namespace GardenWise
             return samples;
         }
 
-        // only the model, with the long list of questions (GARDENER_CHECK=model)
-        private static async Task CheckModelOnly()
+        // only the model, with the long list of questions (GARDENER_CHECK=model, or =online for the model of ai_config.json)
+        private static async Task CheckModelOnly(bool online)
         {
             GardenerDialogue dialogue = Object.FindAnyObjectByType<GardenerDialogue>();
             GardenerPanel panel = Object.FindAnyObjectByType<GardenerPanel>();
@@ -639,7 +705,8 @@ namespace GardenWise
             GardenerReplySource lastSource = GardenerReplySource.Notice;
             string lastReply = "";
             dialogue.ReplyFinished += (text, source) => { lastReply = text; lastSource = source; };
-            await CheckLocalModel(dialogue, panel, () => lastReply, () => lastSource, true);
+            dialogue.UseOnlineModel = online;
+            await CheckLocalModel(dialogue, panel, () => lastReply, () => lastSource, true, online);
         }
 
         // ------------------------------------------------------------------ tools
