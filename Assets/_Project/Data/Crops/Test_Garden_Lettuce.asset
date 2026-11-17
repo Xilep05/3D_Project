@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 23c9b2c97444493fac2cbb4b86b057a7, type: 3}
+  m_Name: Test_Garden_Lettuce
+  m_EditorClassIdentifier: Assembly-CSharp::GardenWise.CropData
+  cropName: Lettuce
+  season: 0
+  idealMoistureMin: 50
+  idealMoistureMax: 80
+  daysToGrow: 5
+  maxHealth: 3
+  stageModels:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  tip: Lettuce likes a soil that stays a bit wet.
