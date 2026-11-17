@@ -317,28 +317,36 @@ namespace GardenWise
             return fontAsset;
         }
 
-        // the voice library (sherpa-onnx) for Windows: used in the editor and in a Windows build
+        // the voice library (sherpa-onnx 2.0.1), one copy per system: Windows x86_64 and macOS Apple Silicon,
+        // each used by the editor and the build of its own system only
         private static void ConfigureVoiceLibrary()
         {
             foreach (string file in new[] { "sherpa-onnx-c-api.dll", "onnxruntime.dll" })
+                ConfigureNativePlugin("/x86_64/" + file, "Windows", "x86_64", BuildTarget.StandaloneWindows64);
+
+            foreach (string file in new[] { "libsherpa-onnx-c-api.dylib", "libonnxruntime.dylib" })
+                ConfigureNativePlugin("/macOS/" + file, "OSX", "ARM64", BuildTarget.StandaloneOSX);
+        }
+
+        private static void ConfigureNativePlugin(string file, string os, string cpu, BuildTarget target)
+        {
+            PluginImporter plugin = AssetImporter.GetAtPath(PluginFolder + file) as PluginImporter;
+            if (plugin == null)
             {
-                PluginImporter plugin = AssetImporter.GetAtPath(PluginFolder + "/x86_64/" + file) as PluginImporter;
-                if (plugin == null)
-                {
-                    Debug.LogWarning("[Gaston] Voice library missing: " + PluginFolder + "/x86_64/" + file);
-                    continue;
-                }
-
-                if (!plugin.GetCompatibleWithAnyPlatform() && plugin.GetCompatibleWithEditor() &&
-                    plugin.GetCompatibleWithPlatform(BuildTarget.StandaloneWindows64)) continue;
-
-                plugin.SetCompatibleWithAnyPlatform(false);
-                plugin.SetCompatibleWithEditor(true);
-                plugin.SetEditorData("OS", "Windows");
-                plugin.SetEditorData("CPU", "x86_64");
-                plugin.SetCompatibleWithPlatform(BuildTarget.StandaloneWindows64, true);
-                plugin.SaveAndReimport();
+                Debug.LogWarning("[Gaston] Voice library missing: " + PluginFolder + file);
+                return;
             }
+
+            if (!plugin.GetCompatibleWithAnyPlatform() && plugin.GetCompatibleWithEditor() &&
+                plugin.GetEditorData("OS") == os && plugin.GetCompatibleWithPlatform(target)) return;
+
+            plugin.SetCompatibleWithAnyPlatform(false);
+            plugin.SetCompatibleWithEditor(true);
+            plugin.SetEditorData("OS", os);
+            plugin.SetEditorData("CPU", cpu);
+            plugin.SetCompatibleWithPlatform(target, true);
+            if (target == BuildTarget.StandaloneOSX) plugin.SetPlatformData(target, "CPU", cpu);
+            plugin.SaveAndReimport();
         }
 
         // LLMUnity unpacks its native library into StreamingAssets after the editor starts: wait for it before quitting

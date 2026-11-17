@@ -32,7 +32,7 @@ namespace GardenWise
         [SerializeField] private bool useLocalModel = true;
         [SerializeField] private LLM llm;
         [SerializeField] private LLMAgent agent;
-        [Tooltip("GGUF file. Looked for in LLMUnity's models folder (AppData/Roaming/LLMUnity/models), then in StreamingAssets.")]
+        [Tooltip("GGUF file. Looked for in LLMUnity's models folder (LLMUnitySetup.modelDownloadPath: AppData/Roaming/LLMUnity/models on Windows, ~/.config/LLMUnity/models on macOS), then in StreamingAssets.")]
         [SerializeField] private string modelFile = "gemma-3-12b-it-Q4_K_M.gguf";
 
         // rules and a few examples of style, no list of game commands: the model answers freely from the garden state
