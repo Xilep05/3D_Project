@@ -45,7 +45,7 @@ namespace GardenWise
                  "Drag another clip here to change his voice.")]
         [SerializeField] private AudioClip voiceSample;
         [Tooltip("How lively the voice is. Low = flat but steady, high = more intonation, sometimes a strange word.")]
-        [Range(0.4f, 1.2f)] [SerializeField] private float liveliness = 0.9f;
+        [Range(0.4f, 1.2f)] [SerializeField] private float liveliness = 0.7f;
         [Tooltip("1 = the natural pauses of the voice. Lower = shorter pauses, faster delivery.")]
         [Range(0.2f, 1f)] [SerializeField] private float pauses = 1f;
         [Tooltip("How many sentences Gaston prepares in one go. 1 = he starts talking sooner, more = the reply flows better.")]

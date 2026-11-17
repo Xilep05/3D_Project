@@ -299,7 +299,7 @@ MonoBehaviour:
   speakFolder: Gardener/tts-pocket
   speakReplies: 1
   voiceSample: {fileID: 8300000, guid: 66fbc6d7ceee05b4da8c1e0deb823a29, type: 3}
-  liveliness: 0.9
+  liveliness: 0.7
   pauses: 1
   sentencesTogether: 1
 --- !u!114 &6439422204062672913
