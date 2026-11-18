@@ -18,6 +18,10 @@ namespace GardenWise
         private float pitch;
         private float verticalSpeed;
 
+        private Vector3 startPosition;
+        private Quaternion startRotation;
+        private float startPitch;
+
         public Transform CameraPivot
         {
             get { return cameraPivot; }
@@ -33,6 +37,38 @@ namespace GardenWise
                 pitch = cameraPivot.localEulerAngles.x;
                 if (pitch > 180f) pitch -= 360f;
             }
+
+            startPosition = transform.position;
+            startRotation = transform.rotation;
+            startPitch = pitch;
+        }
+
+        private void OnEnable()
+        {
+            GameEvents.GameStateChanged += HandleGameStateChanged;
+        }
+
+        private void OnDisable()
+        {
+            GameEvents.GameStateChanged -= HandleGameStateChanged;
+        }
+
+        // every level starts from the same place, facing the garden
+        public void ResetToStart()
+        {
+            // a CharacterController must be disabled to be moved by hand
+            controller.enabled = false;
+            transform.SetPositionAndRotation(startPosition, startRotation);
+            controller.enabled = true;
+
+            verticalSpeed = 0f;
+            pitch = startPitch;
+            if (cameraPivot != null) cameraPivot.localRotation = Quaternion.Euler(pitch, 0f, 0f);
+        }
+
+        private void HandleGameStateChanged(GameState state)
+        {
+            if (state == GameState.LevelIntro) ResetToStart();
         }
 
         // input: x = right / left, y = forward / back, between -1 and 1. Call it every frame (gravity)
