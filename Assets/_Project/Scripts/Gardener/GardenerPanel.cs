@@ -64,6 +64,7 @@ namespace GardenWise
         [SerializeField] private bool keyboardShortcuts = true;
         [SerializeField] private KeyCode typeKey = KeyCode.T;
         [SerializeField] private KeyCode talkKey = KeyCode.V;
+        [SerializeField] private KeyCode foldKey = KeyCode.G;
 
         // the colours of the game's UI (UI_Canvas): dark green panels, green buttons, gold stars, white text
         private static readonly Color32 PanelGreen = new Color32(0x1C, 0x3D, 0x2B, 0xFF);
@@ -197,7 +198,7 @@ namespace GardenWise
         // ------------------------------------------------------------------ keyboard (desktop)
 
         // T: type a question (the player stands still while the field has the focus, see DesktopInput), Esc: stop typing
-        // V held down: talk, released: Gaston listens to what was said
+        // V held down: talk, released: Gaston listens to what was said. G: fold or unfold the panel
         private void ReadShortcuts()
         {
             if (!IsVisible) return;
@@ -209,6 +210,7 @@ namespace GardenWise
             }
 
             if (Input.GetKeyDown(typeKey)) StartCoroutine(StartTyping());
+            if (Input.GetKeyDown(foldKey)) Toggle();
 
             if (voice == null) return;
             if (Input.GetKeyDown(talkKey))

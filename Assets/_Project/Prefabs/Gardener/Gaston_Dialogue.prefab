@@ -360,6 +360,7 @@ MonoBehaviour:
   keyboardShortcuts: 1
   typeKey: 116
   talkKey: 118
+  foldKey: 103
 --- !u!1 &1659298774975163708
 GameObject:
   m_ObjectHideFlags: 0

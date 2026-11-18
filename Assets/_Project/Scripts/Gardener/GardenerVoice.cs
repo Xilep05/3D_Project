@@ -31,8 +31,8 @@ namespace GardenWise
         [Tooltip("Folder in StreamingAssets. Parakeet (encoder / decoder / joiner .int8.onnx + tokens.txt) " +
                  "or Whisper (<name>-encoder.int8.onnx, <name>-decoder.int8.onnx, <name>-tokens.txt).")]
         [SerializeField] private string listenFolder = "Gardener/stt-parakeet";
-        [Tooltip("Name of the microphone to use (the Console lists them at start). Empty = the first real microphone: " +
-                 "phone (Continuity) and virtual devices (Teams, Zoom...) are skipped, they often send only silence.")]
+        [Tooltip("Name of the microphone to use (the Console lists them at start). Empty = the default microphone " +
+                 "chosen in the sound settings of Windows or macOS.")]
         [SerializeField] private string microphone = "";
         [SerializeField] private int maxListenSeconds = 20;
         [Tooltip("In the editor, keeps the last recording in Logs/GardenerLastRecording.wav to hear what the microphone really caught.")]
@@ -80,31 +80,15 @@ namespace GardenWise
         // samples per second of what Synthesize returns (given by the voice model)
         public int SpeechSampleRate { get; private set; } = 24000;
 
-        // the chosen microphone, else the first one that is a real microphone of this computer, else the default one (null)
+        // the chosen microphone, else the default one of the computer (null): the one set in the sound settings,
+        // never a guess from the list (on a PC with a headset it can start with a virtual device that sends only silence)
         private string Device
         {
             get
             {
-                string[] devices = Microphone.devices;
-                if (!string.IsNullOrEmpty(microphone) && Array.IndexOf(devices, microphone) >= 0) return microphone;
-                foreach (string device in devices)
-                {
-                    if (!LooksVirtual(device)) return device;
-                }
-
+                if (!string.IsNullOrEmpty(microphone) && Array.IndexOf(Microphone.devices, microphone) >= 0) return microphone;
                 return null;
             }
-        }
-
-        private static bool LooksVirtual(string device)
-        {
-            string name = device.ToLowerInvariant();
-            foreach (string word in new[] { "iphone", "ipad", "teams", "zoom", "virtual", "blackhole", "aggregate", "agrégé", "soundflower", "loopback", "discord" })
-            {
-                if (name.Contains(word)) return true;
-            }
-
-            return false;
         }
 
         private static readonly Regex Tags = new Regex(@"<[^>]{1,24}>");
@@ -374,9 +358,10 @@ namespace GardenWise
             // exactly zero everywhere: the microphone sent nothing at all (blocked by the system, or a device that is not on)
             if (samples.Length > 0 && loudest == 0f)
             {
-                Debug.LogWarning("[Gaston] Voice: the microphone \"" + (Device ?? "default") + "\" sent only silence. On macOS, allow the microphone " +
-                                 "for Unity and for Unity Hub (System Settings > Privacy & Security > Microphone), then restart both. " +
-                                 "Microphones found: " + string.Join(", ", Microphone.devices));
+                Debug.LogWarning("[Gaston] Voice: the microphone \"" + (Device ?? "default") + "\" sent only silence. Check that it is the " +
+                                 "right one (default microphone in the sound settings, or the Microphone field of GardenerVoice: " +
+                                 string.Join(", ", Microphone.devices) + ") and that it is allowed (Windows: Settings > Privacy > Microphone; " +
+                                 "macOS: allow Unity, and open Unity without Unity Hub or allow Unity Hub too).");
                 LastProblem = Say("Mon micro ne reçoit aucun son. Vérifie qu'il est autorisé, ou écris-moi ta question !",
                     "My microphone gets no sound. Check that it is allowed, or type your question!");
                 return;
