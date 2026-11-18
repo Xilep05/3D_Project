@@ -117,6 +117,65 @@ namespace GardenWise
             if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", 0f);
         }
 
+        // all the materials of the project (Assets/_Project): Standard -> URP Lit, particle shaders -> URP Particles/Unlit
+        // (does the same job as the Render Pipeline Converter for this project)
+        [MenuItem("GardenWise/Convert Project Materials to URP")]
+        public static void ConvertProjectMaterials()
+        {
+            if (!IsUrp())
+            {
+                Debug.LogWarning("URP is not active yet: set the URP asset in Project Settings > Graphics first.");
+                return;
+            }
+
+            Shader lit = Shader.Find("Universal Render Pipeline/Lit");
+            Shader particles = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+            int converted = 0;
+
+            foreach (string guid in AssetDatabase.FindAssets("t:Material", new[] { "Assets/_Project" }))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+                if (material == null || material.shader == null) continue;
+                string shaderName = material.shader.name;
+
+                if (shaderName == "Standard" && lit != null)
+                {
+                    Color color = material.color;
+                    Texture texture = material.mainTexture;
+                    float smoothness = material.HasProperty("_Glossiness") ? material.GetFloat("_Glossiness") : 0.1f;
+                    material.shader = lit;
+                    material.color = color;
+                    material.mainTexture = texture;
+                    material.SetFloat("_Smoothness", smoothness);
+                    converted++;
+                }
+                else if (shaderName.Contains("Particles") && !shaderName.StartsWith("Universal") && particles != null)
+                {
+                    Texture texture = material.mainTexture;
+                    Color tint = material.HasProperty("_TintColor") ? material.GetColor("_TintColor") * 2f : (material.HasProperty("_Color") ? material.color : Color.white);
+                    material.shader = particles;
+                    material.mainTexture = texture;
+                    material.color = tint;
+                    material.SetFloat("_Surface", 1f);
+                    material.SetFloat("_Blend", 0f);
+                    material.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+                    material.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+                    material.SetFloat("_ZWrite", 0f);
+                    material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                    material.renderQueue = (int)RenderQueue.Transparent;
+                    converted++;
+                }
+                else continue;
+
+                EditorUtility.SetDirty(material);
+            }
+
+            FixAllMaterials();
+            AssetDatabase.SaveAssets();
+            Debug.Log("Converted " + converted + " materials to URP.");
+        }
+
         public static bool IsUrp()
         {
             return GraphicsSettings.defaultRenderPipeline != null;
