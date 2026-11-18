@@ -63,6 +63,16 @@ namespace GardenWise
             CurrentPlant = null;
         }
 
+        // a new level starts on fresh soil: no plant, no mulch, default moisture
+        public void ResetTile(float startMoisture)
+        {
+            ClearPlant();
+            Moisture = Mathf.Clamp(startMoisture, 0f, 100f);
+            HasMulch = false;
+            if (mulchVisual != null) mulchVisual.SetActive(false);
+            SetHighlighted(false);
+        }
+
         // called by the Interactor when the player aims at this tile (or stops aiming at it)
         public void SetHighlighted(bool highlighted)
         {

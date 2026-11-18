@@ -37,6 +37,8 @@ Demo for 18 Nov (2 min): plant a radish and a lettuce, water them from the barre
 
 **Input separate from interaction:** for the VR version, `DesktopInput` and `PlayerController` are replaced by the XR Origin (teleport for Léa, who gets motion sick). The XR rig calls the same methods: `interactor.Aim(controllerRay)` and `interactor.UseCurrentTool()`, or `interactor.UseTool(GardenTool.WateringCan, tile)` when a grabbed can is poured on a tile. `ToolBelt`, `Interactor` and `SoilTile` do not change.
 
+**New level, fresh garden:** on `LevelIntro`, `GardenGrid` resets every tile (no plant, no mulch, moisture 50) and `PlayerController` goes back to its start position. `InteractionFeedback` shows the crosshair, the tile aimed at and the last action in the HUD of the Main scene.
+
 **Harvest counted once:** the `Interactor` removes the plant right after `plant.Harvest()`, so the same plant can never send `PlantHarvested` twice. A dead plant is removed with the basket, without score.
 
 ## How the other systems use it
