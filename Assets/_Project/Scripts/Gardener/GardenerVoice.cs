@@ -31,7 +31,8 @@ namespace GardenWise
         [Tooltip("Folder in StreamingAssets. Parakeet (encoder / decoder / joiner .int8.onnx + tokens.txt) " +
                  "or Whisper (<name>-encoder.int8.onnx, <name>-decoder.int8.onnx, <name>-tokens.txt).")]
         [SerializeField] private string listenFolder = "Gardener/stt-parakeet";
-        [Tooltip("Name of the microphone to use. Empty = the default microphone of the computer.")]
+        [Tooltip("Name of the microphone to use (the Console lists them at start). Empty = the first real microphone: " +
+                 "phone (Continuity) and virtual devices (Teams, Zoom...) are skipped, they often send only silence.")]
         [SerializeField] private string microphone = "";
         [SerializeField] private int maxListenSeconds = 20;
         [Tooltip("In the editor, keeps the last recording in Logs/GardenerLastRecording.wav to hear what the microphone really caught.")]
@@ -79,10 +80,31 @@ namespace GardenWise
         // samples per second of what Synthesize returns (given by the voice model)
         public int SpeechSampleRate { get; private set; } = 24000;
 
-        // null = the default microphone
+        // the chosen microphone, else the first one that is a real microphone of this computer, else the default one (null)
         private string Device
         {
-            get { return string.IsNullOrEmpty(microphone) ? null : microphone; }
+            get
+            {
+                string[] devices = Microphone.devices;
+                if (!string.IsNullOrEmpty(microphone) && Array.IndexOf(devices, microphone) >= 0) return microphone;
+                foreach (string device in devices)
+                {
+                    if (!LooksVirtual(device)) return device;
+                }
+
+                return null;
+            }
+        }
+
+        private static bool LooksVirtual(string device)
+        {
+            string name = device.ToLowerInvariant();
+            foreach (string word in new[] { "iphone", "ipad", "teams", "zoom", "virtual", "blackhole", "aggregate", "agrégé", "soundflower", "loopback", "discord" })
+            {
+                if (name.Contains(word)) return true;
+            }
+
+            return false;
         }
 
         private static readonly Regex Tags = new Regex(@"<[^>]{1,24}>");
@@ -206,7 +228,7 @@ namespace GardenWise
             ModelsLoaded = true;
             Status = "speaking " + (CanSpeak ? "ready (" + speakFolder + ")" : "off") +
                      ", listening " + (recognizer != null ? "ready (" + listenFolder + ")" : "off") +
-                     ", microphones: " + Microphone.devices.Length +
+                     ", microphones: " + Microphone.devices.Length + " (" + string.Join(", ", Microphone.devices) + "), listens with " + (Device ?? "the default one") +
                      " (loaded in " + (Time.realtimeSinceStartup - start).ToString("0.0") + " s)" + problem;
 
             if (problem.Length > 0) Debug.LogWarning("[Gaston] Voice: " + Status);
@@ -290,14 +312,23 @@ namespace GardenWise
             StopSpeaking();
             recording = Microphone.Start(Device, false, maxListenSeconds, 16000);
             State = VoiceState.Listening;
+
+            // a microphone the system refuses does not record at all: say it now, the Console is the only clue
+            if (!Microphone.IsRecording(Device))
+                Debug.LogWarning("[Gaston] Voice: the microphone \"" + (Device ?? "default") + "\" did not start. On macOS, check " +
+                                 "System Settings > Privacy & Security > Microphone for Unity (and Unity Hub when the editor is opened from it).");
+            else Debug.Log("[Gaston] Voice: listening with " + (Device ?? "the default microphone"));
         }
 
         public void StopListening()
         {
             if (State != VoiceState.Listening) return;
 
-            int length = Microphone.IsRecording(Device) ? Microphone.GetPosition(Device) : recording.samples;
+            bool stillRecording = Microphone.IsRecording(Device);
+            int length = stillRecording ? Microphone.GetPosition(Device) : recording.samples;
             Microphone.End(Device);
+            Debug.Log("[Gaston] Voice: stopped listening, " + (length / (float)recording.frequency).ToString("0.0") + " s recorded" +
+                      (stillRecording ? "" : " (the recording had already stopped)"));
 
             float[] samples = new float[0];
             int rate = recording.frequency;
@@ -339,6 +370,17 @@ namespace GardenWise
 
             if (destroyed) return;
             State = VoiceState.Idle;
+
+            // exactly zero everywhere: the microphone sent nothing at all (blocked by the system, or a device that is not on)
+            if (samples.Length > 0 && loudest == 0f)
+            {
+                Debug.LogWarning("[Gaston] Voice: the microphone \"" + (Device ?? "default") + "\" sent only silence. On macOS, allow the microphone " +
+                                 "for Unity and for Unity Hub (System Settings > Privacy & Security > Microphone), then restart both. " +
+                                 "Microphones found: " + string.Join(", ", Microphone.devices));
+                LastProblem = Say("Mon micro ne reçoit aucun son. Vérifie qu'il est autorisé, ou écris-moi ta question !",
+                    "My microphone gets no sound. Check that it is allowed, or type your question!");
+                return;
+            }
 
             if (string.IsNullOrWhiteSpace(text))
             {
