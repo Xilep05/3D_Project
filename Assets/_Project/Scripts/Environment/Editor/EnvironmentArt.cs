@@ -27,7 +27,7 @@ namespace GardenWise
         [MenuItem("GardenWise/Regenerate Environment Textures")]
         public static void RegenerateTextures()
         {
-            foreach (string name in new[] { "Tex_Grass", "Tex_Soil", "Tex_Gravel", "Tex_Wood" })
+            foreach (string name in new[] { "Tex_Grass", "Tex_Soil", "Tex_GravelFine", "Tex_Wood" })
             {
                 AssetDatabase.DeleteAsset(ArtFolder + "/" + name + ".png");
             }
@@ -63,7 +63,7 @@ namespace GardenWise
 
         public static Material GravelMaterial(string name, Vector2 tiling)
         {
-            return Textured(name, "Tex_Gravel", GravelPixel, Color.white, tiling, 0.08f);
+            return Textured(name, "Tex_GravelFine", GravelPixel, Color.white, tiling, 0.08f);
         }
 
         public static Material HighlightMaterial()
@@ -136,6 +136,19 @@ namespace GardenWise
             RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.fogColor = new Color(0.76f, 0.84f, 0.9f);
             RenderSettings.fogDensity = 0.012f;
+
+            ApplyQuality();
+        }
+
+        // smooth edges (4x MSAA), sharper shadows and textures seen at an angle
+        // saved in ProjectSettings/QualitySettings.asset for the current quality level
+        private static void ApplyQuality()
+        {
+            QualitySettings.antiAliasing = 4;
+            QualitySettings.anisotropicFiltering = AnisotropicFiltering.ForceEnable;
+            QualitySettings.shadows = ShadowQuality.All;
+            QualitySettings.shadowResolution = ShadowResolution.High;
+            QualitySettings.shadowDistance = 45f;
         }
 
         private static Material SkyMaterial()
@@ -250,10 +263,12 @@ namespace GardenWise
             Material door = DarkWoodMaterial();
 
             Part(PrimitiveType.Cube, "Walls", shed, new Vector3(0f, 1f, 0f), new Vector3(2.6f, 2f, 2f), wood, true);
-            Part(PrimitiveType.Cube, "Door", shed, new Vector3(0f, 0.75f, 1.02f), new Vector3(0.8f, 1.5f, 0.05f), door, false);
+            Part(PrimitiveType.Cube, "Door", shed, new Vector3(-0.35f, 0.75f, 1.02f), new Vector3(0.8f, 1.5f, 0.05f), door, false);
+            Part(PrimitiveType.Cube, "Window Frame", shed, new Vector3(0.65f, 1.25f, 1.02f), new Vector3(0.62f, 0.52f, 0.05f), door, false);
+            Part(PrimitiveType.Cube, "Window", shed, new Vector3(0.65f, 1.25f, 1.035f), new Vector3(0.5f, 0.4f, 0.05f), Plain("Mat_Env_Glass", new Color(0.35f, 0.45f, 0.55f), 0.8f), false);
 
             // gable under the roof (a cube turned 45 degrees) and the two roof sides
-            GameObject gable = Part(PrimitiveType.Cube, "Gable", shed, new Vector3(0f, 2f, 0f), new Vector3(2.6f, 1.41f, 1.41f), wood, false);
+            GameObject gable = Part(PrimitiveType.Cube, "Gable", shed, new Vector3(0f, 2f, 0f), new Vector3(2.56f, 1.41f, 1.41f), wood, false);
             gable.transform.localRotation = Quaternion.Euler(45f, 0f, 0f);
             GameObject front = Part(PrimitiveType.Cube, "Roof Front", shed, new Vector3(0f, 2.55f, 0.55f), new Vector3(3f, 0.1f, 1.6f), roof, false);
             front.transform.localRotation = Quaternion.Euler(40f, 0f, 0f);
@@ -274,6 +289,14 @@ namespace GardenWise
                     Vector3 spot = BorderSpot(random);
                     if (spot.x < -3.2f && spot.z > 6.5f) continue;
                     Spawn(flowerModels[random.Next(flowerModels.Length)], flowers, spot, Range(random, 0.3f, 0.5f), random);
+                }
+
+                // a few flowers welcoming the player on both sides of the gate
+                for (int i = 0; i < 10; i++)
+                {
+                    float side = i % 2 == 0 ? -1f : 1f;
+                    Vector3 spot = new Vector3(side * Range(random, 1.7f, 3.2f), 0f, Range(random, -1.6f, -1.1f));
+                    Spawn(flowerModels[random.Next(flowerModels.Length)], flowers, spot, Range(random, 0.3f, 0.45f), random);
                 }
                 return;
             }
@@ -464,7 +487,7 @@ namespace GardenWise
 
             Transform tufts = Group("Grass Tufts", parent);
             int placed = 0;
-            for (int attempt = 0; attempt < 600 && placed < 170; attempt++)
+            for (int attempt = 0; attempt < 1200 && placed < 320; attempt++)
             {
                 float angle = Range(random, 0f, Mathf.PI * 2f);
                 float radius = Mathf.Sqrt(Range(random, 0.02f, 1f)) * 26f;
@@ -646,16 +669,18 @@ namespace GardenWise
             return new Color(value, value * 0.97f, value * 0.93f);
         }
 
+        // fine, soft gravel: small pebbles of slightly different tones, low contrast (no visual noise)
         private static Color GravelPixel(int x, int y)
         {
             float u = x / (float)TextureSize;
             float v = y / (float)TextureSize;
-            float pebble = Hash(x / 4, y / 4, 13);
-            float shade = Fbm(u, v, 8, 2, 41f);
+            float pebble = Hash(x / 8, y / 8, 13);
+            float edge = (x % 8 == 0 || y % 8 == 0) ? 0.94f : 1f;
+            float shade = Fbm(u, v, 4, 3, 41f);
             float grain = Hash(x, y, 17);
 
-            Color baseColor = new Color(0.74f, 0.69f, 0.6f);
-            return baseColor * (0.72f + pebble * 0.25f + shade * 0.12f + (grain - 0.5f) * 0.08f);
+            Color baseColor = new Color(0.8f, 0.76f, 0.68f);
+            return baseColor * edge * (0.84f + pebble * 0.1f + shade * 0.1f + (grain - 0.5f) * 0.04f);
         }
 
         // horizontal planks, 4 per texture, with grain and a dark seam
