@@ -43,3 +43,12 @@ Next step: replace the simple shapes by the free CC0 models of Quaternius (Styli
 - `Quaternius_Crops`: lettuce, beet (used for the radish), carrot, tomato and pumpkin of the **LowPoly Crops Pack** (CC0), 4 growth stages + crop. The test crops use them in `CropData.stageModels`; owner 2 can use the same models for the real crops.
 - `Scripts/Environment/Editor/ThirdPartyImport.cs` sets the import (one material per texture, textures at most 1024 px) and `Art/Shaders/Foliage.shader` draws leaves, grass and petals with cut-out on both sides. Menu **GardenWise > Fix Third-Party Materials** if leaves look like plain squares.
 - Only the models used are in the repo, to keep the Git LFS quota low. Credits: Quaternius (quaternius.com), CC0.
+
+## Life, effects and URP (feature/visuals)
+
+- **Wind**: leaves, grass and petals sway gently (both foliage shaders, more at the top than at the base).
+- **Butterflies** around the flowers (`Butterfly`) and **birds** circling high (`BirdFlock`), part of `Environment.prefab`.
+- **Particles** (`InteractionEffects` on the Player): water drops when watering, earth when planting, straw when mulching, golden sparkles when harvesting. The `Interactor` raises `Planted`, `Watered`, `Mulched`, `Harvested` with the tile.
+- **Rain barrel** (owner 4's prefab, dressed in the scenes only): wooden staves and metal hoops around the gauge, the water level is seen from above. `RainBarrel` itself is unchanged.
+- **URP**: materials made by the builders use Standard or URP Lit depending on the active pipeline; `FoliageURP.shader` is the URP version of the foliage. `Scripts/Environment/Editor/URP` (compiled only when the URP package is installed) sets 4x MSAA, shadows, SSAO and a post-processing profile (`Art/Environment/PostFX_Profile.asset`: bloom, tone mapping, colour, white balance, vignette), adds a global Volume to each scene built and turns post-processing on for the cameras. Menu **GardenWise > Setup URP Look (open scene)** applies it to any open scene.
+- Switching to URP: Package Manager > Universal RP > Install, then Window > Rendering > Render Pipeline Converter > Built-in to URP (Rendering Settings + Material Upgrade) > Convert, then GardenWise > Fix Third-Party Materials and rebuild the scenes.

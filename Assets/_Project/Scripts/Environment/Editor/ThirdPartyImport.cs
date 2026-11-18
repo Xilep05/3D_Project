@@ -1,6 +1,7 @@
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace GardenWise
 {
@@ -85,7 +86,7 @@ namespace GardenWise
 
             if (IsFoliage(name))
             {
-                Shader foliage = Shader.Find("GardenWise/Foliage");
+                Shader foliage = Shader.Find(IsUrp() ? "GardenWise/FoliageURP" : "GardenWise/Foliage");
                 if (foliage != null && material.shader != foliage)
                 {
                     Color color = material.HasProperty("_Color") ? material.color : Color.white;
@@ -97,9 +98,28 @@ namespace GardenWise
                 return;
             }
 
+            // with URP, a Standard material must use the URP Lit shader (same colour and texture)
+            if (IsUrp() && material.shader != null && material.shader.name == "Standard")
+            {
+                Shader lit = Shader.Find("Universal Render Pipeline/Lit");
+                if (lit != null)
+                {
+                    Color color = material.color;
+                    material.shader = lit;
+                    material.color = color;
+                    material.mainTexture = texture;
+                }
+            }
+
             // stylised low-poly looks better matt than shiny
             if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", 0.05f);
+            if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", 0.05f);
             if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", 0f);
+        }
+
+        public static bool IsUrp()
+        {
+            return GraphicsSettings.defaultRenderPipeline != null;
         }
 
         private static bool IsFoliage(string name)

@@ -23,6 +23,12 @@ namespace GardenWise
         // short text for the player after each action ("Planted Radish", "The barrel is empty"...)
         public event Action<string> Message;
 
+        // what just happened on which tile (for the particles, the sounds, the VR haptics...)
+        public event Action<SoilTile> Planted;
+        public event Action<SoilTile> Watered;
+        public event Action<SoilTile> Mulched;
+        public event Action<SoilTile> Harvested;
+
         private void Awake()
         {
             if (toolBelt == null) toolBelt = GetComponent<ToolBelt>();
@@ -101,6 +107,7 @@ namespace GardenWise
             if (seed == null) return Fail("No seed in the bag for this level");
             if (!tile.PlantCrop(seed)) return Fail("Nothing can be planted here (no plant prefab on the tile)");
 
+            if (Planted != null) Planted(tile);
             Say("Planted " + seed.cropName + ". It likes a moisture of " + Mathf.RoundToInt(seed.idealMoistureMin) + " to " + Mathf.RoundToInt(seed.idealMoistureMax));
             return true;
         }
@@ -124,6 +131,7 @@ namespace GardenWise
                 tile.AddWater(fallbackLitresPerPour);
             }
 
+            if (Watered != null) Watered(tile);
             string message = "Watered: moisture " + Mathf.RoundToInt(before) + " -> " + Mathf.RoundToInt(tile.Moisture);
             Plant plant = tile.CurrentPlant;
             if (plant != null && plant.Data != null && tile.Moisture > plant.Data.idealMoistureMax)
@@ -139,6 +147,7 @@ namespace GardenWise
             if (tile.HasMulch) return Fail("This tile already has mulch");
 
             tile.AddMulch();
+            if (Mulched != null) Mulched(tile);
             Say("Mulch added: this soil now dries half as fast");
             return true;
         }
@@ -161,6 +170,7 @@ namespace GardenWise
             string cropName = plant.Data.cropName;
             float quality = plant.Harvest();
             tile.ClearPlant();
+            if (Harvested != null) Harvested(tile);
 
             Say("Harvested " + cropName + ", quality " + Mathf.RoundToInt(quality * 100f) + " %");
             return true;

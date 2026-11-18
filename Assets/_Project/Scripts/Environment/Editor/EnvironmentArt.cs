@@ -79,15 +79,104 @@ namespace GardenWise
             Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (material == null)
             {
-                material = new Material(Shader.Find("Standard"));
+                material = new Material(LitShader());
                 AssetDatabase.CreateAsset(material, path);
             }
 
+            // Standard with the built-in pipeline, URP Lit once the project uses URP
+            if (material.shader != LitShader()) material.shader = LitShader();
             material.color = color;
             material.SetFloat("_Glossiness", smoothness);
+            material.SetFloat("_Smoothness", smoothness);
             material.SetFloat("_Metallic", 0f);
             EditorUtility.SetDirty(material);
             return material;
+        }
+
+        public static Shader LitShader()
+        {
+            Shader urp = ThirdPartyImport.IsUrp() ? Shader.Find("Universal Render Pipeline/Lit") : null;
+            return urp != null ? urp : Shader.Find("Standard");
+        }
+
+        // soft round dot for the particles (splash, dust, sparkles), alpha blended
+        public static Material ParticleMaterial()
+        {
+            string path = ArtFolder + "/Mat_FX_Particle.mat";
+            EnsureFolder(ArtFolder);
+
+            bool urp = ThirdPartyImport.IsUrp();
+            Shader shader = Shader.Find(urp ? "Universal Render Pipeline/Particles/Unlit" : "Legacy Shaders/Particles/Alpha Blended");
+
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null)
+            {
+                material = new Material(shader);
+                AssetDatabase.CreateAsset(material, path);
+            }
+            if (material.shader != shader) material.shader = shader;
+
+            material.mainTexture = DotTexture();
+            if (urp)
+            {
+                // transparent, alpha blended, no depth write
+                material.SetFloat("_Surface", 1f);
+                material.SetFloat("_Blend", 0f);
+                material.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+                material.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+                material.SetFloat("_ZWrite", 0f);
+                material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                material.renderQueue = (int)RenderQueue.Transparent;
+                material.color = Color.white;
+            }
+            else
+            {
+                material.SetColor("_TintColor", new Color(0.5f, 0.5f, 0.5f, 0.5f));
+            }
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
+        private static Texture2D DotTexture()
+        {
+            string path = ArtFolder + "/Tex_FX_Dot.png";
+            Texture2D existing = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (existing != null) return existing;
+
+            const int size = 64;
+            Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            Color[] pixels = new Color[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = (x + 0.5f) / size * 2f - 1f;
+                    float dy = (y + 0.5f) / size * 2f - 1f;
+                    float alpha = Mathf.Clamp01(1f - Mathf.Sqrt(dx * dx + dy * dy));
+                    pixels[y * size + x] = new Color(1f, 1f, 1f, alpha * alpha);
+                }
+            }
+            texture.SetPixels(pixels);
+            texture.Apply();
+            File.WriteAllBytes(path, texture.EncodeToPNG());
+            Object.DestroyImmediate(texture);
+            AssetDatabase.ImportAsset(path);
+
+            TextureImporter importer = (TextureImporter)AssetImporter.GetAtPath(path);
+            importer.alphaIsTransparency = true;
+            importer.wrapMode = TextureWrapMode.Clamp;
+            importer.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        }
+
+        // last step of every scene builder: URP post-processing when the project uses URP
+        // (UrpLook is only compiled when the URP package is installed, so it is called by name)
+        public static void FinishScene()
+        {
+            Type look = Type.GetType("GardenWise.UrpLook, GardenWise.URP.Editor");
+            if (look == null) return;
+            System.Reflection.MethodInfo apply = look.GetMethod("ApplyToOpenScene");
+            if (apply != null) apply.Invoke(null, null);
         }
 
         private static Material Textured(string name, string textureName, Func<int, int, Color> pixel, Color tint, Vector2 tiling, float smoothness)
@@ -199,6 +288,9 @@ namespace GardenWise
             {
                 GameObjectUtility.SetStaticEditorFlags(child.gameObject, StaticEditorFlags.BatchingStatic);
             }
+
+            // moving things are added after the static marking
+            CreateLife(root.transform, random);
 
             EnsureFolder(PrefabFolder);
             PrefabUtility.SaveAsPrefabAssetAndConnect(root, PrefabFolder + "/Environment.prefab", InteractionMode.AutomatedAction);
@@ -531,6 +623,158 @@ namespace GardenWise
                 Vector3 position = new Vector3(Mathf.Cos(angle) * radius, -4f, 4f + Mathf.Sin(angle) * radius);
                 Part(PrimitiveType.Sphere, "Hill", hills, position, new Vector3(Range(random, 30f, 45f), Range(random, 10f, 18f), Range(random, 30f, 45f)), grass[i % 2], false);
             }
+        }
+
+        // ================= life =================
+
+        // butterflies around the flowers and a few birds circling high in the sky
+        private static void CreateLife(Transform parent, Random random)
+        {
+            Transform life = Group("Life", parent);
+            Material body = Plain("Mat_Env_InsectBody", new Color(0.15f, 0.12f, 0.1f), 0.2f);
+            Material[] wings =
+            {
+                Plain("Mat_Env_WingOrange", new Color(1f, 0.6f, 0.15f), 0.2f),
+                Plain("Mat_Env_WingWhite", new Color(0.97f, 0.97f, 0.92f), 0.2f),
+                Plain("Mat_Env_WingBlue", new Color(0.35f, 0.6f, 1f), 0.2f),
+                Plain("Mat_Env_WingYellow", new Color(1f, 0.9f, 0.3f), 0.2f)
+            };
+
+            for (int i = 0; i < 9; i++)
+            {
+                Vector3 start = i < 6 ? BorderSpot(random) : new Vector3(Range(random, -3f, 3f), 0f, Range(random, 2f, 6f));
+                start.y = Range(random, 0.5f, 1.3f);
+                CreateButterfly(life, start, body, wings[random.Next(wings.Length)], random);
+            }
+
+            Material bird = Plain("Mat_Env_Bird", new Color(0.18f, 0.18f, 0.22f), 0.1f);
+            for (int i = 0; i < 2; i++)
+            {
+                GameObject flockObject = new GameObject("Bird Flock");
+                flockObject.transform.SetParent(life, false);
+                flockObject.transform.position = new Vector3(Range(random, -10f, 10f), 0f, 4f + Range(random, -6f, 14f));
+                BirdFlock flock = flockObject.AddComponent<BirdFlock>();
+
+                int count = 3 + random.Next(3);
+                Transform[] birds = new Transform[count];
+                for (int b = 0; b < count; b++) birds[b] = CreateBird(flockObject.transform, bird).transform;
+                SetField(flock, "birds", birds);
+                SetFloatField(flock, "radius", Range(random, 22f, 34f));
+                SetFloatField(flock, "height", Range(random, 16f, 24f));
+                SetFloatField(flock, "speed", Range(random, 5f, 8f) * (i == 0 ? 1f : -1f));
+            }
+        }
+
+        private static void CreateButterfly(Transform parent, Vector3 position, Material body, Material wing, Random random)
+        {
+            GameObject root = new GameObject("Butterfly");
+            root.transform.SetParent(parent, false);
+            root.transform.position = position;
+
+            Part(PrimitiveType.Capsule, "Body", root.transform, Vector3.zero, new Vector3(0.025f, 0.04f, 0.025f), body, false).transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            Transform left = WingPivot(root.transform, "Left Wing", -1f, wing, new Vector3(0.11f, 0.004f, 0.09f), 0.06f);
+            Transform right = WingPivot(root.transform, "Right Wing", 1f, wing, new Vector3(0.11f, 0.004f, 0.09f), 0.06f);
+
+            Butterfly butterfly = root.AddComponent<Butterfly>();
+            SetField(butterfly, "leftWing", left);
+            SetField(butterfly, "rightWing", right);
+            SetFloatField(butterfly, "flapSpeed", Range(random, 14f, 20f));
+            SetFloatField(butterfly, "speed", Range(random, 0.6f, 1.1f));
+        }
+
+        private static GameObject CreateBird(Transform parent, Material material)
+        {
+            GameObject bird = new GameObject("Bird");
+            bird.transform.SetParent(parent, false);
+            Part(PrimitiveType.Capsule, "Body", bird.transform, Vector3.zero, new Vector3(0.12f, 0.2f, 0.12f), material, false).transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            WingPivot(bird.transform, "Left Wing", -1f, material, new Vector3(0.45f, 0.02f, 0.16f), 0.05f);
+            WingPivot(bird.transform, "Right Wing", 1f, material, new Vector3(0.45f, 0.02f, 0.16f), 0.05f);
+            return bird;
+        }
+
+        // a wing hinged on the body: the pivot turns, the thin box is the wing (thin box = visible from both sides)
+        private static Transform WingPivot(Transform parent, string name, float side, Material material, Vector3 size, float bodyOffset)
+        {
+            Transform pivot = Group(name, parent);
+            pivot.localPosition = new Vector3(side * bodyOffset * 0.3f, 0f, 0f);
+            Part(PrimitiveType.Cube, "Wing", pivot, new Vector3(side * size.x / 2f, 0f, 0f), size, material, false);
+            return pivot;
+        }
+
+        // ================= rain barrel (owner 4) =================
+
+        // wooden staves and metal hoops around the water gauge of the RainBarrel prefab: the barrel is open,
+        // the water level is seen from above (the "empty" cylinder of the gauge is hidden)
+        public static void DressBarrel(GameObject barrel)
+        {
+            if (barrel == null) return;
+
+            Transform empty = barrel.transform.Find("Empty");
+            if (empty != null)
+            {
+                Renderer emptyRenderer = empty.GetComponent<Renderer>();
+                if (emptyRenderer != null) emptyRenderer.enabled = false;
+            }
+
+            Transform water = barrel.transform.Find("Water");
+            if (water != null)
+            {
+                Renderer waterRenderer = water.GetComponent<Renderer>();
+                if (waterRenderer != null) waterRenderer.sharedMaterial = Plain("Mat_Env_BarrelWater", new Color(0.25f, 0.5f, 0.6f), 0.9f);
+            }
+
+            Transform shell = Group("Wooden Barrel", barrel.transform);
+            Material wood = WoodMaterial();
+            Material metal = Plain("Mat_Env_Hoop", new Color(0.25f, 0.25f, 0.27f), 0.5f);
+            const int staves = 18;
+            const float radius = 0.47f;
+            const float height = 1.25f;
+
+            for (int i = 0; i < staves; i++)
+            {
+                float angle = i * 360f / staves;
+                Vector3 direction = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
+                GameObject stave = Part(PrimitiveType.Cube, "Stave", shell, direction * radius + Vector3.up * height / 2f, new Vector3(0.17f, height, 0.04f), wood, false);
+                stave.transform.localRotation = Quaternion.Euler(0f, angle, 0f);
+
+                foreach (float hoopY in new[] { 0.22f, 1.0f })
+                {
+                    GameObject hoop = Part(PrimitiveType.Cube, "Hoop", shell, direction * (radius + 0.025f) + Vector3.up * hoopY, new Vector3(0.18f, 0.06f, 0.02f), metal, false);
+                    hoop.transform.localRotation = Quaternion.Euler(0f, angle, 0f);
+                }
+            }
+
+            // the barrel can be clicked like before (the gauge has no collider of its own)
+            if (barrel.GetComponent<Collider>() == null)
+            {
+                CapsuleCollider capsule = barrel.AddComponent<CapsuleCollider>();
+                capsule.radius = radius + 0.03f;
+                capsule.height = height;
+                capsule.center = new Vector3(0f, height / 2f, 0f);
+            }
+        }
+
+        private static void SetField(Object target, string field, Object value)
+        {
+            SerializedObject serialized = new SerializedObject(target);
+            serialized.FindProperty(field).objectReferenceValue = value;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void SetField(Object target, string field, Object[] values)
+        {
+            SerializedObject serialized = new SerializedObject(target);
+            SerializedProperty list = serialized.FindProperty(field);
+            list.arraySize = values.Length;
+            for (int i = 0; i < values.Length; i++) list.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void SetFloatField(Object target, string field, float value)
+        {
+            SerializedObject serialized = new SerializedObject(target);
+            serialized.FindProperty(field).floatValue = value;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
         // ================= third-party models =================
