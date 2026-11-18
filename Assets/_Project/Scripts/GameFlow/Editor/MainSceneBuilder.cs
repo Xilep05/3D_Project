@@ -80,6 +80,7 @@ namespace GardenWise
 
             if (water != null) SetReference(water, "weather", weather);
             if (barrel != null) SetReference(Find<RainBarrel>(barrel), "water", water);
+            EnvironmentArt.DressBarrel(barrel);
             if (hud != null) SetReference(hud, "water", water);
             if (toolBelt != null) SetReference(toolBelt, "hud", hud);
             if (interactor != null) SetReference(interactor, "water", water);
@@ -106,6 +107,7 @@ namespace GardenWise
                 new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
             }
 
+            EnvironmentArt.FinishScene();
             EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene(), ScenePath);
             AddToBuildSettings(ScenePath);
             AssetDatabase.SaveAssets();

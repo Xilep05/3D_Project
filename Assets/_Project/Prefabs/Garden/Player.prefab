@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 8156237924786531085}
   - component: {fileID: 7254785674240307664}
   - component: {fileID: 7877099247779195555}
+  - component: {fileID: 5448105307247566620}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -131,6 +132,20 @@ MonoBehaviour:
   toolBelt: {fileID: 8156237924786531085}
   interactor: {fileID: 7254785674240307664}
   viewCamera: {fileID: 7609977561163470571}
+--- !u!114 &5448105307247566620
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5738182976354797586}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9fa639fb47b444408f444276a3686ce5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GardenWise.InteractionEffects
+  interactor: {fileID: 7254785674240307664}
+  particleMaterial: {fileID: 2100000, guid: cd2a6f8d5a1b34e938cda7fbe4e5ec5c, type: 2}
 --- !u!1 &7580348928125883127
 GameObject:
   m_ObjectHideFlags: 0
