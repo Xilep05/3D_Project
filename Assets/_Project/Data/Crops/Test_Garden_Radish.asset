@@ -20,8 +20,8 @@ MonoBehaviour:
   maxHealth: 3
   stageModels:
   - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
+  - {fileID: 919132149155446097, guid: 724467da9a9cb4739a052c486b8eebf1, type: 3}
+  - {fileID: 919132149155446097, guid: 5df17c2c261f04f14887af896466f118, type: 3}
+  - {fileID: 919132149155446097, guid: 869107df31e114eb99a2cfc0978c36d3, type: 3}
+  - {fileID: 919132149155446097, guid: ec7589e41afa245669d685896860d439, type: 3}
   tip: Radishes grow fast and like regular watering.

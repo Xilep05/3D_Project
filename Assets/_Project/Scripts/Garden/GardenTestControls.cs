@@ -43,7 +43,7 @@ namespace GardenWise
             yield return null;
             GameManager game = GameManager.Instance;
             if (game != null && game.State == GameState.LevelIntro) game.BeginFirstDay();
-            Show("Plant a seed (1), water it (2), ring the bell to end the day, harvest when it is golden (4)");
+            Show("Plant a seed (1), water it (2), ring the bell to end the day, harvest when it is fully grown (4)");
         }
 
         private void Update()

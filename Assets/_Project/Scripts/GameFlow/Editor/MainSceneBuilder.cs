@@ -22,7 +22,6 @@ namespace GardenWise
         private const string GardenPrefab = "Assets/_Project/Prefabs/Garden/Garden_3x3.prefab";
         private const string BellPrefab = "Assets/_Project/Prefabs/Garden/DayBell.prefab";
         private const string PlayerPrefab = "Assets/_Project/Prefabs/Garden/Player.prefab";
-        private const string GrassMaterial = "Assets/_Project/Art/Garden/Mat_Grass.mat";
         private const string GastonPrefab = "Assets/_Project/Prefabs/Gardener/Gaston_Dialogue.prefab";
 
         // level select order: level 1, level 2 (levels 3 to 5 are bonus, added here when they exist)
@@ -43,7 +42,9 @@ namespace GardenWise
             // the player brings its own camera
             if (Camera.main != null) Object.DestroyImmediate(Camera.main.gameObject);
 
-            CreateGround();
+            // decor, light, sky and fog shared with the test scenes
+            EnvironmentArt.CreateEnvironment();
+            EnvironmentArt.ApplyLighting();
 
             // ---- systems ----
             GameObject flow = Place(GameFlowPrefab, Vector3.zero, missing);
@@ -114,16 +115,6 @@ namespace GardenWise
         }
 
         // ---------- pieces ----------
-
-        private static void CreateGround()
-        {
-            GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            ground.name = "Ground";
-            ground.transform.localScale = new Vector3(3f, 1f, 3f);
-
-            Material grass = AssetDatabase.LoadAssetAtPath<Material>(GrassMaterial);
-            if (grass != null) ground.GetComponent<Renderer>().sharedMaterial = grass;
-        }
 
         private static LevelData[] LoadLevels(List<string> missing)
         {
