@@ -125,6 +125,8 @@ namespace GardenWise
 
         [Header("Settings")]
         [SerializeField] private GardenerLanguage language = GardenerLanguage.French;
+        [Tooltip("When a level starts, Gaston says its intro text (LevelData.introText), with his voice, without the model.")]
+        [SerializeField] private bool readLevelIntro = true;
         [SerializeField] private bool logToConsole = true;
 
         // local events for Gaston's own UI and voice (the other systems only listen to GameEvents.GardenerAsked)
@@ -633,13 +635,27 @@ namespace GardenWise
             if (pending != null) pending.Abort();
         }
 
-        // every level starts with a fresh count, like the ScoreManager
+        // every level starts with a fresh count, like the ScoreManager, and Gaston says what the level is about
         private void HandleGameStateChanged(GameState state)
         {
             if (state != GameState.LevelIntro) return;
 
             CancelCurrentAnswer();
             QuestionCount = 0;
+
+            LevelData level = GameManager.Instance != null ? GameManager.Instance.CurrentLevel : null;
+            if (readLevelIntro && level != null && !string.IsNullOrWhiteSpace(level.introText)) Say(level.introText);
+        }
+
+        // a written line (level intro, tutorial): shown in the bubble and spoken, no model, not counted as a question
+        public void Say(string text)
+        {
+            text = RemoveThinking(text);
+            if (text.Length == 0) return;
+
+            CancelCurrentAnswer();
+            requestId++;
+            Finish(requestId, text, GardenerReplySource.Notice);
         }
 
         private string FindModelFile()

@@ -25,6 +25,7 @@ namespace GardenWise
         private const double TimeoutSeconds = 900.0;
         private const int FramesBeforeChecks = 5;
         private const string LogFolder = "Logs";
+        private const string MainScenePath = "Assets/_Project/Scenes/Main.unity";
 
         private static readonly Color Green = new Color32(0x2F, 0x7D, 0x32, 0xFF);
         private static readonly Color Gold = new Color32(0xB2, 0x6A, 0x00, 0xFF);
@@ -52,7 +53,17 @@ namespace GardenWise
                 return;
             }
 
-            EditorSceneManager.OpenScene(GardenerBuilder.ScenePath);
+            // GARDENER_CHECK=main: the whole game (pixel style applied, Main rebuilt by its builder) instead of the test scene
+            if (Environment.GetEnvironmentVariable("GARDENER_CHECK") == "main")
+            {
+                PixelStyle.ApplyToPrefabs();
+                MainSceneBuilder.Build();
+                EditorSceneManager.OpenScene(MainScenePath);
+            }
+            else
+            {
+                EditorSceneManager.OpenScene(GardenerBuilder.ScenePath);
+            }
 
             // GARDENER_MODEL=<file.gguf>: try another model for this run only (the scene is not saved)
             string model = Environment.GetEnvironmentVariable("GARDENER_MODEL");
@@ -108,7 +119,8 @@ namespace GardenWise
 
             try
             {
-                if (only == "model") await CheckModelOnly(false);
+                if (only == "main") await CheckMainScene();
+                else if (only == "model") await CheckModelOnly(false);
                 else if (only == "online") await CheckModelOnly(true);
                 else if (only == "voices") await CheckVoice(Object.FindAnyObjectByType<GardenerVoice>(), true);
                 else if (only == "listen") await CheckListening(Object.FindAnyObjectByType<GardenerVoice>());
@@ -720,13 +732,69 @@ namespace GardenWise
             await CheckLocalModel(dialogue, panel, () => lastReply, () => lastSource, true, online);
         }
 
+        // GARDENER_CHECK=main: Gaston inside the real game, through the real menus (screenshots Logs/GardenerMain_*.png)
+        private static async Task CheckMainScene()
+        {
+            GameManager game = GameManager.Instance;
+            MenuManager menu = Object.FindAnyObjectByType<MenuManager>();
+            GardenerDialogue dialogue = Object.FindAnyObjectByType<GardenerDialogue>();
+            GardenerPanel panel = Object.FindAnyObjectByType<GardenerPanel>();
+            GardenContextBuilder garden = Object.FindAnyObjectByType<GardenContextBuilder>();
+            Check(game != null && menu != null && dialogue != null && panel != null && garden != null,
+                "Main has the game manager, the menus and Gaston");
+            if (failures.Count > 0) return;
+
+            GardenerReplySource lastSource = GardenerReplySource.Notice;
+            string lastReply = "";
+            int replies = 0;
+            dialogue.ReplyFinished += (text, source) => { lastReply = text; lastSource = source; replies++; };
+
+            Check(panel.transform.parent != null && panel.transform.parent.GetComponent<Canvas>() != null,
+                "Gaston sits under the game canvas, not in the HUD panel that is switched off outside the levels");
+            Check(game.State == GameState.Menu && !panel.IsVisible, "in the main menu Gaston is hidden");
+            Capture("GardenerMain_menu.png");
+
+            menu.OnPlayClicked();
+            await Task.Delay(100);
+            Capture("GardenerMain_levels.png");
+
+            menu.OnLevelClicked(0);
+            await WaitUntil(() => replies > 0, 3f);
+            Check(game.State == GameState.LevelIntro && !panel.IsVisible, "during the level intro the panel stays hidden");
+            Check(lastSource == GardenerReplySource.Notice && lastReply.Length > 0 && game.CurrentLevel.introText.Replace("\n", " ").StartsWith(lastReply.Substring(0, Mathf.Min(20, lastReply.Length))),
+                "Gaston says the intro of the level: " + lastReply);
+            Capture("GardenerMain_intro.png");
+
+            menu.OnStartClicked();
+            await Task.Delay(100);
+            GardenSnapshot snapshot = garden.Capture();
+            Check(game.State == GameState.Playing && panel.IsVisible && !panel.IsOpen, "while playing Gaston shows, folded");
+            Check(snapshot.weatherKnown && snapshot.waterKnown && snapshot.numberOfDays == game.CurrentLevel.numberOfDays,
+                "Gaston reads the real weather, water and level (" + snapshot.levelName + ", day " + snapshot.day + "/" + snapshot.numberOfDays + ")");
+            Capture("GardenerMain_hud.png");
+
+            int before = replies;
+            dialogue.Ask("Qu'est-ce que je dois faire aujourd'hui ?");
+            await WaitUntil(() => replies > before && !dialogue.IsAnswering, 120f);
+            panel.SkipTypewriter();
+            Check(panel.IsOpen && lastReply.Length > 0 && lastSource != GardenerReplySource.Notice,
+                "a question in the game opens the panel and gets an answer (" + lastSource + "): " + lastReply);
+            await Task.Delay(300);
+            Capture("GardenerMain_gaston.png");
+
+            for (int day = 0; day < 20 && game.State == GameState.Playing; day++) game.EndDay();
+            await Task.Delay(100);
+            Check(game.State == GameState.Results && !panel.IsVisible, "on the results screen Gaston is hidden again");
+            Capture("GardenerMain_results.png");
+        }
+
         // ------------------------------------------------------------------ tools
 
         // renders the canvas through the camera: works from the command line, where there is no Game view
         private static void Capture(string fileName)
         {
-            Canvas canvas = Object.FindAnyObjectByType<Canvas>();
-            Camera camera = Camera.main;
+            Canvas canvas = Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None).FirstOrDefault(found => found.isRootCanvas);
+            Camera camera = Camera.main != null ? Camera.main : Object.FindAnyObjectByType<Camera>();
             if (canvas == null || camera == null) return;
 
             RenderTexture target = new RenderTexture(1920, 1080, 24);

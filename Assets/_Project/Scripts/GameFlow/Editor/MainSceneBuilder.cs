@@ -23,6 +23,7 @@ namespace GardenWise
         private const string BellPrefab = "Assets/_Project/Prefabs/Garden/DayBell.prefab";
         private const string PlayerPrefab = "Assets/_Project/Prefabs/Garden/Player.prefab";
         private const string GrassMaterial = "Assets/_Project/Art/Garden/Mat_Grass.mat";
+        private const string GastonPrefab = "Assets/_Project/Prefabs/Gardener/Gaston_Dialogue.prefab";
 
         // level select order: level 1, level 2 (levels 3 to 5 are bonus, added here when they exist)
         private static readonly string[] LevelPaths =
@@ -96,6 +97,9 @@ namespace GardenWise
                 missing.Add("HudPanel of the MenuManager");
             }
 
+            // ---- Gaston (owner 5) ----
+            AddGaston(ui, grid, weather, water, missing);
+
             if (Object.FindFirstObjectByType<EventSystem>() == null)
             {
                 new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
@@ -167,6 +171,8 @@ namespace GardenWise
             target.text = "";
             message.text = "";
 
+            PixelStyle.StyleTextsOverWorld(root);
+
             InteractionFeedback feedback = root.AddComponent<InteractionFeedback>();
             SetReference(feedback, "interactor", interactor);
             SetReference(feedback, "targetText", target);
@@ -198,6 +204,35 @@ namespace GardenWise
             scenes.RemoveAll(scene => scene.path == scenePath);
             scenes.Insert(0, new EditorBuildSettingsScene(scenePath, true));
             EditorBuildSettings.scenes = scenes.ToArray();
+        }
+
+        // Gaston goes under the canvas, not in the HUD panel that is switched off outside the levels: he hides himself
+        // there but keeps loading his models, and says the intro of each level. Top left, under the HUD bar
+        // (the weather of the day is on the right)
+        private static void AddGaston(GameObject ui, GardenGrid grid, WeatherSystem weather, WaterManager water, List<string> missing)
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(GastonPrefab);
+            if (prefab == null || ui == null)
+            {
+                missing.Add(GastonPrefab);
+                return;
+            }
+
+            GameObject gaston = (GameObject)PrefabUtility.InstantiatePrefab(prefab, ui.transform);
+            RectTransform rect = (RectTransform)gaston.transform;
+            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0f, 1f);
+            rect.anchoredPosition = new Vector2(24f, -108f);
+
+            GardenContextBuilder context = gaston.GetComponent<GardenContextBuilder>();
+            SetReference(context, "garden", grid);
+            SetReference(context, "weather", weather);
+            SetReference(context, "water", water);
+            SetBool(context, "useTestGarden", false);
+
+            // folded at start (T or the header opens it), and the player walks again after Enter
+            GardenerPanel panel = gaston.GetComponent<GardenerPanel>();
+            SetBool(panel, "openAtStart", false);
+            SetBool(panel, "keepTypingAfterSend", false);
         }
 
         // ---------- helpers ----------

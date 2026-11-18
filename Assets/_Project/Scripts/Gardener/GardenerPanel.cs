@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace GardenWise
@@ -53,6 +54,16 @@ namespace GardenWise
         [SerializeField] private TMP_InputField inputField;
         [SerializeField] private Image micIcon;
         [SerializeField] private TMP_Text counterText;
+        [Tooltip("After Enter, the field keeps the focus to type the next question. Off in the game: the player walks again.")]
+        [SerializeField] private bool keepTypingAfterSend = true;
+
+        [Header("In the game")]
+        [Tooltip("With a GameManager in the scene, the panel only shows while a level is played (not in the menus).")]
+        [SerializeField] private bool onlyWhilePlaying = true;
+        [Tooltip("Desktop: a key to type a question, a key held down to talk.")]
+        [SerializeField] private bool keyboardShortcuts = true;
+        [SerializeField] private KeyCode typeKey = KeyCode.T;
+        [SerializeField] private KeyCode talkKey = KeyCode.V;
 
         private static readonly Color32 Cream = new Color32(0xFF, 0xF8, 0xE7, 0xFF);
         private static readonly Color32 Sun = new Color32(0xF5, 0xC5, 0x42, 0xFF);
@@ -74,6 +85,8 @@ namespace GardenWise
         private int nextIcon;
         private bool iconsWereSeen;
         private GardenerVoice.VoiceState shownVoiceState;
+        private CanvasGroup visibility;
+        private bool talkKeyHeld;
 
         private void Awake()
         {
@@ -97,6 +110,10 @@ namespace GardenWise
             tagBackground.gameObject.SetActive(false);
             SetReply(idleText, false);
             SkipTypewriter();
+
+            // hidden with a CanvasGroup, never switched off: the models keep loading and Gaston can still speak
+            visibility = GetComponent<CanvasGroup>();
+            if (visibility == null) visibility = gameObject.AddComponent<CanvasGroup>();
         }
 
         private void OnEnable()
@@ -105,7 +122,9 @@ namespace GardenWise
             dialogue.ReplyUpdated += HandleReplyUpdated;
             dialogue.ReplyFinished += HandleReplyFinished;
             inputField.onSubmit.AddListener(HandleSubmit);
+            GameEvents.GameStateChanged += HandleGameStateChanged;
             ShowCounter();
+            ShowIfPlaying(GameManager.Instance != null ? GameManager.Instance.State : GameState.Playing);
         }
 
         private void OnDisable()
@@ -114,12 +133,14 @@ namespace GardenWise
             dialogue.ReplyUpdated -= HandleReplyUpdated;
             dialogue.ReplyFinished -= HandleReplyFinished;
             inputField.onSubmit.RemoveListener(HandleSubmit);
+            GameEvents.GameStateChanged -= HandleGameStateChanged;
         }
 
         private void Update()
         {
             UpdateFold();
             UpdateVoiceState();
+            if (keyboardShortcuts) ReadShortcuts();
 
             if (shownCharacters < totalCharacters)
             {
@@ -149,6 +170,72 @@ namespace GardenWise
         public void Close()
         {
             IsOpen = false;
+        }
+
+        public bool IsVisible
+        {
+            get { return visibility == null || visibility.alpha > 0f; }
+        }
+
+        private void HandleGameStateChanged(GameState state)
+        {
+            ShowIfPlaying(state);
+        }
+
+        private void ShowIfPlaying(GameState state)
+        {
+            bool show = !onlyWhilePlaying || GameManager.Instance == null || state == GameState.Playing;
+            visibility.alpha = show ? 1f : 0f;
+            visibility.interactable = show;
+            visibility.blocksRaycasts = show;
+
+            if (!show && inputField.isFocused) inputField.DeactivateInputField();
+        }
+
+        // ------------------------------------------------------------------ keyboard (desktop)
+
+        // T: type a question (the player stands still while the field has the focus, see DesktopInput), Esc: stop typing
+        // V held down: talk, released: Gaston listens to what was said
+        private void ReadShortcuts()
+        {
+            if (!IsVisible) return;
+
+            if (inputField.isFocused)
+            {
+                if (Input.GetKeyDown(KeyCode.Escape)) StopTyping();
+                return;
+            }
+
+            if (Input.GetKeyDown(typeKey)) StartCoroutine(StartTyping());
+
+            if (voice == null) return;
+            if (Input.GetKeyDown(talkKey))
+            {
+                talkKeyHeld = true;
+                Open();
+                voice.StartListening();
+            }
+            else if (talkKeyHeld && Input.GetKeyUp(talkKey))
+            {
+                talkKeyHeld = false;
+                voice.StopListening();
+            }
+        }
+
+        // a frame later, so the key that opened the field is not typed in it
+        private IEnumerator StartTyping()
+        {
+            Open();
+            yield return null;
+            inputField.Select();
+            inputField.ActivateInputField();
+        }
+
+        private void StopTyping()
+        {
+            inputField.DeactivateInputField();
+            if (EventSystem.current != null && EventSystem.current.currentSelectedGameObject == inputField.gameObject)
+                EventSystem.current.SetSelectedGameObject(null);
         }
 
         private void UpdateFold()
@@ -320,7 +407,8 @@ namespace GardenWise
         {
             dialogue.Ask(text);
             inputField.text = "";
-            if (isActiveAndEnabled) StartCoroutine(FocusNextFrame());
+            if (!keepTypingAfterSend) StopTyping();
+            else if (isActiveAndEnabled) StartCoroutine(FocusNextFrame());
         }
 
         // the field loses the focus right after Enter: take it back so the player can keep typing

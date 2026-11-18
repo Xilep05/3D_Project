@@ -183,6 +183,7 @@ MonoBehaviour:
   - 'Too much water is as bad as too little: the roots can rot.'
   - 'Check tomorrow''s weather before watering: if it rains, the rain does the job.'
   language: 0
+  readLevelIntro: 1
   logToConsole: 1
 --- !u!82 &5156772576153927728
 AudioSource:
@@ -354,6 +355,11 @@ MonoBehaviour:
   inputField: {fileID: 5960770900923881907}
   micIcon: {fileID: 2688868084586025170}
   counterText: {fileID: 9023188210643963185}
+  keepTypingAfterSend: 1
+  onlyWhilePlaying: 1
+  keyboardShortcuts: 1
+  typeKey: 116
+  talkKey: 118
 --- !u!1 &1659298774975163708
 GameObject:
   m_ObjectHideFlags: 0
