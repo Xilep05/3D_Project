@@ -20,7 +20,7 @@ In Play mode:
 | Space | end the day (same as the bell) |
 | Esc | free the mouse (click to take it back) |
 
-Demo for 18 Nov (2 min): plant a radish and a lettuce, water them from the barrel, add mulch on one tile, ring the bell a few times (the soil dries, the rain fills the barrel, the plants grow), water from the tap, harvest the golden radish, show that a second click on the empty tile does nothing.
+Demo for 18 Nov (2 min): plant a radish and a lettuce, water them from the barrel, add mulch on one tile, ring the bell a few times (the soil dries, the rain fills the barrel, the plants grow), water from the tap, harvest the fully grown radish, show that a second click on the empty tile does nothing.
 
 ## How it is built
 

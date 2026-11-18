@@ -20,8 +20,8 @@ MonoBehaviour:
   maxHealth: 3
   stageModels:
   - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
+  - {fileID: 919132149155446097, guid: a52f6b4061fa74ab0ab568657f1c683f, type: 3}
+  - {fileID: 919132149155446097, guid: 0fca2bb220fd94f7eb925c9b14ee120e, type: 3}
+  - {fileID: 919132149155446097, guid: 1e12cf438c61345dba6b3f334f0d2c84, type: 3}
+  - {fileID: 919132149155446097, guid: 8d0c79d169ae74b20a4f28ee59817b99, type: 3}
   tip: Lettuce likes a soil that stays a bit wet.

@@ -150,3 +150,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GardenWise.PlantPlaceholderView
   shape: {fileID: 3521392638946689972}
   shapeRenderer: {fileID: 2789294312921169255}
+  grownWidth: 0.9

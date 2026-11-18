@@ -14,6 +14,7 @@ namespace GardenWise
         private const string ScenePath = "Assets/_Project/Scenes/Tests/Test_Garden.unity";
         private const string LevelPath = "Assets/_Project/Data/Levels/Test_Garden_Level.asset";
         private const string CropFolder = "Assets/_Project/Data/Crops";
+        private const string CropModelFolder = "Assets/_Project/Art/ThirdParty/Quaternius_Crops/Models";
         private const string PrefabFolder = "Assets/_Project/Prefabs/Garden";
         private const string ArtFolder = "Assets/_Project/Art/Garden";
 
@@ -25,6 +26,8 @@ namespace GardenWise
         private const float TileSize = 1.2f;
         private const float TileGap = 0.4f;
         private const float SoilHeight = 0.2f;
+        private const float FrameHeight = 0.28f;
+        private const float PlankThickness = 0.08f;
 
         [MenuItem("GardenWise/Build Test_Garden Scene")]
         public static void Build()
@@ -41,12 +44,15 @@ namespace GardenWise
             // the player brings its own camera
             if (Camera.main != null) Object.DestroyImmediate(Camera.main.gameObject);
 
-            CropData radish = GetCrop("Radish", 4, 40f, 70f, "Radishes grow fast and like regular watering.");
-            CropData lettuce = GetCrop("Lettuce", 5, 50f, 80f, "Lettuce likes a soil that stays a bit wet.");
+            // test crops; models from the CC0 Crops Pack of Quaternius (no radish in the pack: the beet looks closest)
+            CropData radish = GetCrop("Radish", "Beet", 4, 40f, 70f, "Radishes grow fast and like regular watering.");
+            CropData lettuce = GetCrop("Lettuce", "Lettuce", 5, 50f, 80f, "Lettuce likes a soil that stays a bit wet.");
             CropData[] seeds = { radish, lettuce };
             LevelData level = GetTestLevel(seeds);
 
-            CreateGround();
+            // decor, light, sky and fog shared with the Main scene
+            EnvironmentArt.CreateEnvironment();
+            EnvironmentArt.ApplyLighting();
 
             // water and weather of owner 4
             WaterManager water;
@@ -101,7 +107,7 @@ namespace GardenWise
         // ---------- data ----------
 
         // uses the real crop of owner 2 when it exists (same cropName), otherwise a test crop
-        private static CropData GetCrop(string cropName, int daysToGrow, float idealMin, float idealMax, string tip)
+        private static CropData GetCrop(string cropName, string modelName, int daysToGrow, float idealMin, float idealMax, string tip)
         {
             foreach (string guid in AssetDatabase.FindAssets("t:CropData"))
             {
@@ -127,8 +133,20 @@ namespace GardenWise
             crop.daysToGrow = daysToGrow;
             crop.maxHealth = 3;
             crop.tip = tip;
+            crop.stageModels = GetStageModels(modelName);
             EditorUtility.SetDirty(crop);
             return crop;
+        }
+
+        // Seed: no model (a small mound is shown), then the 4 growth models of the pack: _1 to _4
+        private static GameObject[] GetStageModels(string modelName)
+        {
+            GameObject[] models = new GameObject[5];
+            for (int stage = 1; stage <= 4; stage++)
+            {
+                models[stage] = AssetDatabase.LoadAssetAtPath<GameObject>(CropModelFolder + "/" + modelName + "_" + stage + ".fbx");
+            }
+            return models;
         }
 
         private static LevelData GetTestLevel(CropData[] seeds)
@@ -157,14 +175,6 @@ namespace GardenWise
         }
 
         // ---------- scene ----------
-
-        private static void CreateGround()
-        {
-            GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            ground.name = "Ground";
-            ground.transform.localScale = new Vector3(3f, 1f, 3f);
-            ground.GetComponent<Renderer>().sharedMaterial = GetMaterial("Mat_Grass", new Color(0.42f, 0.62f, 0.32f));
-        }
 
         private static void CreateWaterAndWeather(out WaterManager water, out WeatherSystem weather)
         {
@@ -219,9 +229,10 @@ namespace GardenWise
             root.transform.position = new Vector3(0f, 0f, 4f);
             GardenGrid grid = root.AddComponent<GardenGrid>();
 
-            Material soil = GetMaterial("Mat_GardenSoil", new Color(0.55f, 0.4f, 0.25f));
-            Material highlight = GetMaterial("Mat_TileHighlight", new Color(1f, 0.85f, 0.2f));
-            Material mulch = GetMaterial("Mat_Mulch", new Color(0.85f, 0.72f, 0.4f));
+            Material soil = EnvironmentArt.SoilMaterial();
+            Material wood = EnvironmentArt.WoodMaterial();
+            Material highlight = EnvironmentArt.HighlightMaterial();
+            Material mulch = EnvironmentArt.Plain("Mat_Env_Mulch", new Color(0.86f, 0.72f, 0.42f), 0f);
             float step = TileSize + TileGap;
 
             for (int row = 0; row < 3; row++)
@@ -229,7 +240,7 @@ namespace GardenWise
                 for (int column = 0; column < 3; column++)
                 {
                     Vector3 position = new Vector3((column - 1) * step, 0f, (1 - row) * step);
-                    CreateTile("SoilTile " + (row * 3 + column + 1), root.transform, position, plantPrefab, soil, highlight, mulch);
+                    CreateTile("SoilTile " + (row * 3 + column + 1), root.transform, position, plantPrefab, soil, wood, highlight, mulch);
                 }
             }
 
@@ -238,19 +249,24 @@ namespace GardenWise
         }
 
         // the tile root is not scaled, so the plants that grow on it are not squashed
-        private static void CreateTile(string name, Transform parent, Vector3 position, Plant plantPrefab, Material soil, Material highlight, Material mulch)
+        // each tile is a small raised bed: soil inside a wooden frame a bit higher than the soil
+        private static void CreateTile(string name, Transform parent, Vector3 position, Plant plantPrefab, Material soil, Material wood, Material highlight, Material mulch)
         {
             GameObject tile = new GameObject(name);
             tile.transform.SetParent(parent, false);
             tile.transform.localPosition = position;
 
+            float outer = TileSize + 2f * PlankThickness;
             BoxCollider box = tile.AddComponent<BoxCollider>();
-            box.size = new Vector3(TileSize, SoilHeight, TileSize);
-            box.center = new Vector3(0f, SoilHeight / 2f, 0f);
+            box.size = new Vector3(outer, FrameHeight, outer);
+            box.center = new Vector3(0f, FrameHeight / 2f, 0f);
 
             GameObject soilPart = CreatePart(PrimitiveType.Cube, "Soil", tile.transform, new Vector3(0f, SoilHeight / 2f, 0f), new Vector3(TileSize, SoilHeight, TileSize), soil);
-            GameObject rim = CreatePart(PrimitiveType.Cube, "Highlight", tile.transform, new Vector3(0f, SoilHeight / 2f - 0.01f, 0f), new Vector3(TileSize + 0.12f, SoilHeight - 0.04f, TileSize + 0.12f), highlight);
-            GameObject mulchPart = CreatePart(PrimitiveType.Cube, "Mulch", tile.transform, new Vector3(0f, SoilHeight + 0.015f, 0f), new Vector3(TileSize - 0.1f, 0.03f, TileSize - 0.1f), mulch);
+            CreateFrame("Frame", tile.transform, 0f, wood);
+
+            // the highlight is a yellow frame slightly bigger than the wooden one, shown on top of it
+            GameObject rim = CreateFrame("Highlight", tile.transform, 0.015f, highlight);
+            GameObject mulchPart = CreatePart(PrimitiveType.Cube, "Mulch", tile.transform, new Vector3(0f, SoilHeight + 0.015f, 0f), new Vector3(TileSize - 0.02f, 0.03f, TileSize - 0.02f), mulch);
             rim.SetActive(false);
             mulchPart.SetActive(false);
 
@@ -269,14 +285,34 @@ namespace GardenWise
             SetReference(tint, "soilRenderer", soilPart.GetComponent<Renderer>());
         }
 
+        // 4 planks around the soil; grow > 0 makes a frame slightly bigger (used for the highlight)
+        private static GameObject CreateFrame(string name, Transform parent, float grow, Material material)
+        {
+            GameObject frame = new GameObject(name);
+            frame.transform.SetParent(parent, false);
+
+            float thickness = PlankThickness + 2f * grow;
+            float height = FrameHeight + grow;
+            float length = TileSize + 2f * PlankThickness + 2f * grow;
+            float offset = TileSize / 2f + PlankThickness / 2f;
+            float y = height / 2f;
+
+            CreatePart(PrimitiveType.Cube, "Plank", frame.transform, new Vector3(0f, y, offset), new Vector3(length, height, thickness), material);
+            CreatePart(PrimitiveType.Cube, "Plank", frame.transform, new Vector3(0f, y, -offset), new Vector3(length, height, thickness), material);
+            CreatePart(PrimitiveType.Cube, "Plank", frame.transform, new Vector3(offset, y, 0f), new Vector3(thickness, height, TileSize), material);
+            CreatePart(PrimitiveType.Cube, "Plank", frame.transform, new Vector3(-offset, y, 0f), new Vector3(thickness, height, TileSize), material);
+            return frame;
+        }
+
         private static void CreateBell()
         {
             GameObject root = new GameObject("DayBell");
             root.transform.position = new Vector3(3.2f, 0f, 2.5f);
             DayBell bell = root.AddComponent<DayBell>();
 
-            Material wood = GetMaterial("Mat_BellWood", new Color(0.45f, 0.3f, 0.18f));
-            Material brass = GetMaterial("Mat_BellBrass", new Color(0.85f, 0.65f, 0.2f));
+            Material wood = EnvironmentArt.DarkWoodMaterial();
+            Material brass = EnvironmentArt.Plain("Mat_Env_Brass", new Color(0.88f, 0.68f, 0.25f), 0.75f);
+            brass.SetFloat("_Metallic", 0.6f);
 
             CreatePart(PrimitiveType.Cylinder, "Post", root.transform, new Vector3(0f, 0.75f, 0f), new Vector3(0.1f, 0.75f, 0.1f), wood);
             CreatePart(PrimitiveType.Cube, "Arm", root.transform, new Vector3(0.2f, 1.5f, 0f), new Vector3(0.5f, 0.06f, 0.06f), wood);
@@ -307,8 +343,7 @@ namespace GardenWise
 
             Camera cam = pivot.AddComponent<Camera>();
             cam.nearClipPlane = 0.05f;
-            cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.62f, 0.8f, 0.95f);
+            cam.clearFlags = CameraClearFlags.Skybox;
             pivot.AddComponent<AudioListener>();
             pivot.tag = "MainCamera";
 
