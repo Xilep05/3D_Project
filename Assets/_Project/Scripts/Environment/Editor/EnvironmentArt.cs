@@ -27,7 +27,7 @@ namespace GardenWise
         [MenuItem("GardenWise/Regenerate Environment Textures")]
         public static void RegenerateTextures()
         {
-            foreach (string name in new[] { "Tex_Grass", "Tex_Soil", "Tex_GravelFine", "Tex_Wood" })
+            foreach (string name in new[] { "Tex_Grass", "Tex_Soil", "Tex_GravelFine", "Tex_Wood", "Tex_Straw" })
             {
                 AssetDatabase.DeleteAsset(ArtFolder + "/" + name + ".png");
             }
@@ -64,6 +64,12 @@ namespace GardenWise
         public static Material GravelMaterial(string name, Vector2 tiling)
         {
             return Textured(name, "Tex_GravelFine", GravelPixel, Color.white, tiling, 0.08f);
+        }
+
+        // straw: thin golden strands in every direction, not too bright
+        public static Material MulchMaterial()
+        {
+            return Textured("Mat_Env_Straw", "Tex_Straw", StrawPixel, Color.white, Vector2.one, 0.05f);
         }
 
         public static Material HighlightMaterial()
@@ -898,6 +904,22 @@ namespace GardenWise
             Color light = new Color(0.47f, 0.66f, 0.26f);
             Color color = Color.Lerp(dark, light, large * 0.7f + blades * 0.3f);
             return color * (0.9f + speck * 0.15f);
+        }
+
+        private static Color StrawPixel(int x, int y)
+        {
+            float u = x / (float)TextureSize;
+            float v = y / (float)TextureSize;
+            // two layers of stretched noise, one along x and one along y, give crossing strands
+            float strandsA = Noise(u, v, 48, 3, 61f);
+            float strandsB = Noise(u, v, 3, 48, 67f);
+            float strand = Mathf.Max(strandsA, strandsB);
+            float shade = Fbm(u, v, 4, 2, 71f);
+
+            Color dark = new Color(0.42f, 0.32f, 0.16f);
+            Color light = new Color(0.82f, 0.68f, 0.38f);
+            Color color = Color.Lerp(dark, light, Mathf.Clamp01(strand * 1.4f - 0.25f));
+            return color * (0.85f + shade * 0.2f);
         }
 
         private static Color SoilPixel(int x, int y)

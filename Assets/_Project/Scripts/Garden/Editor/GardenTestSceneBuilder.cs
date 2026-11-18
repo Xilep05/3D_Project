@@ -234,7 +234,7 @@ namespace GardenWise
             Material soil = EnvironmentArt.SoilMaterial();
             Material wood = EnvironmentArt.WoodMaterial();
             Material highlight = EnvironmentArt.HighlightMaterial();
-            Material mulch = EnvironmentArt.Plain("Mat_Env_Mulch", new Color(0.86f, 0.72f, 0.42f), 0f);
+            Material mulch = EnvironmentArt.MulchMaterial();
             float step = TileSize + TileGap;
 
             for (int row = 0; row < 3; row++)
