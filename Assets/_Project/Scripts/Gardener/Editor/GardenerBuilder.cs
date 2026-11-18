@@ -27,16 +27,14 @@ namespace GardenWise
         private const string FontAssetPath = ArtFolder + "/Fonts/PixelifySans SDF.asset";
         private const string PluginFolder = "Assets/_Project/Plugins/SherpaOnnx";
 
-        // the frames are drawn at 12.5 pixels per unit (8 units per drawn pixel): this brings them to 6 units
-        private const float FrameScale = 8f / 6f;
-
-        // GardenWise palette
-        private static readonly Color32 Ink = new Color32(0x3A, 0x2A, 0x1E, 0xFF);
-        private static readonly Color32 SoftInk = new Color32(0x7A, 0x66, 0x55, 0xFF);
-        private static readonly Color32 Cream = new Color32(0xFF, 0xF8, 0xE7, 0xFF);
-        private static readonly Color32 LeafGreen = new Color32(0x2F, 0x6B, 0x2F, 0xFF);
-        private static readonly Color32 Sky = new Color32(0xBF, 0xE3, 0xF2, 0xFF);
-        private static readonly Color32 Grass = new Color32(0x8F, 0xCF, 0x6A, 0xFF);
+        // the GardenWise palette and frames are shared with the rest of the UI (PixelStyle)
+        private const float FrameScale = PixelStyle.FrameScale;
+        private static readonly Color32 Ink = PixelStyle.Ink;
+        private static readonly Color32 SoftInk = PixelStyle.SoftInk;
+        private static readonly Color32 Cream = PixelStyle.Cream;
+        private static readonly Color32 LeafGreen = PixelStyle.LeafGreen;
+        private static readonly Color32 Sky = PixelStyle.Sky;
+        private static readonly Color32 Grass = PixelStyle.Grass;
 
         private static TMP_FontAsset pixelFont;
 
@@ -398,18 +396,8 @@ namespace GardenWise
         private static Image AddFrame(RectTransform rect, string spritePath)
         {
             Image image = AddSprite(rect, spritePath);
-            image.type = Image.Type.Sliced;
-            image.pixelsPerUnitMultiplier = FrameScale;
-
-            // the 3 pixel border of the frames
-            TextureImporter importer = AssetImporter.GetAtPath(spritePath) as TextureImporter;
-            if (importer != null && importer.spriteBorder != new Vector4(3f, 3f, 3f, 3f))
-            {
-                importer.spriteBorder = new Vector4(3f, 3f, 3f, 3f);
-                importer.SaveAndReimport();
-                image.sprite = AssetDatabase.LoadAssetAtPath<Sprite>(spritePath);
-            }
-
+            PixelStyle.Frame(image, spritePath);
+            image.raycastTarget = false;
             return image;
         }
 
