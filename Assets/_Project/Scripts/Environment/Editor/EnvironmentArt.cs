@@ -15,6 +15,7 @@ namespace GardenWise
     {
         private const string ArtFolder = "Assets/_Project/Art/Environment";
         private const string PrefabFolder = "Assets/_Project/Prefabs/Environment";
+        private const string NatureModels = "Assets/_Project/Art/ThirdParty/Quaternius_Nature/Models";
         private const int TextureSize = 256;
 
         // garden layout shared with the scene builders (garden centre at z = 4)
@@ -163,6 +164,9 @@ namespace GardenWise
         // builds the decor, saves it as Prefabs/Environment/Environment.prefab and returns the scene instance
         public static GameObject CreateEnvironment()
         {
+            // free CC0 models of Quaternius when they are in Art/ThirdParty, simple shapes otherwise
+            ThirdPartyImport.FixAllMaterials();
+
             GameObject root = new GameObject("Environment");
             Random random = new Random(7);
 
@@ -173,6 +177,8 @@ namespace GardenWise
             CreateTrees(root.transform, random);
             CreateBushes(root.transform, random);
             CreateRocks(root.transform, random);
+            CreateGrassTufts(root.transform, random);
+            CreatePathPebbles(root.transform, random);
             CreateHills(root.transform, random);
 
             // static batching: hundreds of small pieces drawn in a few calls (important later on the Quest)
@@ -259,6 +265,19 @@ namespace GardenWise
         private static void CreateFlowers(Transform parent, Random random)
         {
             Transform flowers = Group("Flowers", parent);
+
+            GameObject[] flowerModels = Models("Flower_3_Group", "Flower_4_Group", "Flower_3_Group", "Clover_1", "Plant_7");
+            if (flowerModels.Length > 0)
+            {
+                for (int i = 0; i < 40; i++)
+                {
+                    Vector3 spot = BorderSpot(random);
+                    if (spot.x < -3.2f && spot.z > 6.5f) continue;
+                    Spawn(flowerModels[random.Next(flowerModels.Length)], flowers, spot, Range(random, 0.3f, 0.5f), random);
+                }
+                return;
+            }
+
             Material stem = Plain("Mat_Env_Stem", new Color(0.3f, 0.55f, 0.2f), 0f);
             Material[] petals =
             {
@@ -292,6 +311,37 @@ namespace GardenWise
         private static void CreateTrees(Transform parent, Random random)
         {
             Transform trees = Group("Trees", parent);
+
+            GameObject[] broadleaf = Models("CommonTree_1", "CommonTree_2", "CommonTree_3", "CommonTree_4", "CommonTree_5");
+            GameObject[] pines = Models("Pine_1", "Pine_2", "Pine_3");
+            GameObject[] undergrowth = Models("Fern_1", "Mushroom_Common", "Plant_7");
+            if (broadleaf.Length > 0 || pines.Length > 0)
+            {
+                int count = 0;
+                for (int attempt = 0; attempt < 200 && count < 32; attempt++)
+                {
+                    float angle = Range(random, 0f, Mathf.PI * 2f);
+                    float radius = Range(random, 12f, 28f);
+                    Vector3 spot = new Vector3(Mathf.Cos(angle) * radius, 0f, 4f + Mathf.Sin(angle) * radius);
+                    if (spot.z < 0f && Mathf.Abs(spot.x) < 4f) continue;
+
+                    bool pine = pines.Length > 0 && (broadleaf.Length == 0 || random.NextDouble() < 0.35);
+                    GameObject model = pine ? pines[random.Next(pines.Length)] : broadleaf[random.Next(broadleaf.Length)];
+                    Spawn(model, trees, spot, pine ? Range(random, 6f, 9f) : Range(random, 4.5f, 7f), random);
+                    TrunkCollider(trees, spot);
+
+                    // ferns and mushrooms at the foot of some trees
+                    if (undergrowth.Length > 0 && random.NextDouble() < 0.5)
+                    {
+                        Vector3 foot = spot + new Vector3(Range(random, -1.5f, 1.5f), 0f, Range(random, -1.5f, 1.5f));
+                        GameObject plant = undergrowth[random.Next(undergrowth.Length)];
+                        Spawn(plant, trees, foot, plant.name.StartsWith("Mushroom") ? 0.25f : 0.7f, random);
+                    }
+                    count++;
+                }
+                return;
+            }
+
             Material bark = DarkWoodMaterial();
             Material[] leaves =
             {
@@ -337,6 +387,17 @@ namespace GardenWise
         private static void CreateBushes(Transform parent, Random random)
         {
             Transform bushes = Group("Bushes", parent);
+
+            GameObject[] bushModels = Models("Bush_Common", "Bush_Common_Flowers");
+            if (bushModels.Length > 0)
+            {
+                for (int i = 0; i < 18; i++)
+                {
+                    Spawn(bushModels[random.Next(bushModels.Length)], bushes, OutsideFenceSpot(random), Range(random, 0.9f, 1.5f), random);
+                }
+                return;
+            }
+
             Material[] leaves =
             {
                 Plain("Mat_Env_Leaves1", new Color(0.3f, 0.55f, 0.22f), 0f),
@@ -366,6 +427,21 @@ namespace GardenWise
         private static void CreateRocks(Transform parent, Random random)
         {
             Transform rocks = Group("Rocks", parent);
+
+            GameObject[] rockModels = Models("Rock_Medium_1", "Rock_Medium_2", "Rock_Medium_3");
+            if (rockModels.Length > 0)
+            {
+                for (int i = 0; i < 14; i++)
+                {
+                    float angle = Range(random, 0f, Mathf.PI * 2f);
+                    float radius = Range(random, 9.5f, 24f);
+                    Vector3 spot = new Vector3(Mathf.Cos(angle) * radius, 0f, 4f + Mathf.Sin(angle) * radius);
+                    if (spot.z < 0f && Mathf.Abs(spot.x) < 3f) continue;
+                    Spawn(rockModels[random.Next(rockModels.Length)], rocks, spot, Range(random, 0.4f, 1.1f), random);
+                }
+                return;
+            }
+
             Material stone = Plain("Mat_Env_Rock", new Color(0.55f, 0.55f, 0.52f), 0.1f);
 
             for (int i = 0; i < 12; i++)
@@ -377,6 +453,41 @@ namespace GardenWise
 
                 GameObject rock = Part(PrimitiveType.Sphere, "Rock", rocks, position, new Vector3(Range(random, 0.6f, 1.4f), Range(random, 0.35f, 0.7f), Range(random, 0.6f, 1.2f)), stone, false);
                 rock.transform.rotation = Quaternion.Euler(Range(random, -10f, 10f), Range(random, 0f, 360f), Range(random, -10f, 10f));
+            }
+        }
+
+        // tufts of grass on the lawn, never on the gravel or in the garden
+        private static void CreateGrassTufts(Transform parent, Random random)
+        {
+            GameObject[] grass = Models("Grass_Common_Short", "Grass_Common_Tall", "Grass_Wispy_Short", "Grass_Common_Short");
+            if (grass.Length == 0) return;
+
+            Transform tufts = Group("Grass Tufts", parent);
+            int placed = 0;
+            for (int attempt = 0; attempt < 600 && placed < 170; attempt++)
+            {
+                float angle = Range(random, 0f, Mathf.PI * 2f);
+                float radius = Mathf.Sqrt(Range(random, 0.02f, 1f)) * 26f;
+                Vector3 spot = new Vector3(Mathf.Cos(angle) * radius, 0f, 4f + Mathf.Sin(angle) * radius);
+                if (OnGravel(spot)) continue;
+
+                Spawn(grass[random.Next(grass.Length)], tufts, spot, Range(random, 0.25f, 0.55f), random);
+                placed++;
+            }
+        }
+
+        // round pebbles along both sides of the path
+        private static void CreatePathPebbles(Transform parent, Random random)
+        {
+            GameObject[] pebbles = Models("Pebble_Round_1", "Pebble_Round_2", "Pebble_Round_3");
+            if (pebbles.Length == 0) return;
+
+            Transform group = Group("Path Pebbles", parent);
+            for (float z = -11.5f; z < -2.2f; z += Range(random, 0.9f, 1.6f))
+            {
+                float side = random.NextDouble() < 0.5 ? -1f : 1f;
+                Vector3 spot = new Vector3(side * Range(random, 1.2f, 1.45f), 0f, z);
+                Spawn(pebbles[random.Next(pebbles.Length)], group, spot, Range(random, 0.12f, 0.25f), random);
             }
         }
 
@@ -397,6 +508,81 @@ namespace GardenWise
                 Vector3 position = new Vector3(Mathf.Cos(angle) * radius, -4f, 4f + Mathf.Sin(angle) * radius);
                 Part(PrimitiveType.Sphere, "Hill", hills, position, new Vector3(Range(random, 30f, 45f), Range(random, 10f, 18f), Range(random, 30f, 45f)), grass[i % 2], false);
             }
+        }
+
+        // ================= third-party models =================
+
+        // the models found in Art/ThirdParty/Quaternius_Nature/Models (missing ones are skipped)
+        private static GameObject[] Models(params string[] names)
+        {
+            System.Collections.Generic.List<GameObject> found = new System.Collections.Generic.List<GameObject>();
+            foreach (string name in names)
+            {
+                GameObject model = AssetDatabase.LoadAssetAtPath<GameObject>(NatureModels + "/" + name + ".fbx");
+                if (model != null) found.Add(model);
+            }
+            return found.ToArray();
+        }
+
+        // places a model with a given height, a random turn, its base on the ground
+        private static GameObject Spawn(GameObject model, Transform parent, Vector3 position, float height, Random random)
+        {
+            GameObject instance = (GameObject)PrefabUtility.InstantiatePrefab(model, parent);
+            instance.transform.position = position;
+            // keep the model's own axis correction (FBX files often come turned by -90 on x)
+            instance.transform.rotation = Quaternion.Euler(0f, Range(random, 0f, 360f), 0f) * model.transform.rotation;
+
+            Bounds bounds = RendererBounds(instance);
+            if (bounds.size.y > 0.001f) instance.transform.localScale = instance.transform.localScale * (height / bounds.size.y);
+
+            bounds = RendererBounds(instance);
+            instance.transform.position += new Vector3(0f, position.y - bounds.min.y, 0f);
+            return instance;
+        }
+
+        // the models have no collider: an invisible trunk stops the player walking through a tree
+        private static void TrunkCollider(Transform parent, Vector3 position)
+        {
+            GameObject trunk = new GameObject("Trunk Collider");
+            trunk.transform.SetParent(parent, false);
+            trunk.transform.position = position + new Vector3(0f, 1.5f, 0f);
+            CapsuleCollider capsule = trunk.AddComponent<CapsuleCollider>();
+            capsule.radius = 0.35f;
+            capsule.height = 3f;
+        }
+
+        private static Bounds RendererBounds(GameObject instance)
+        {
+            Renderer[] renderers = instance.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0) return new Bounds(instance.transform.position, Vector3.zero);
+
+            Bounds bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+            return bounds;
+        }
+
+        // a spot in the flower border, along the back and the sides inside the fence
+        private static Vector3 BorderSpot(Random random)
+        {
+            int side = random.Next(3);
+            if (side == 0) return new Vector3(Range(random, -6.5f, 6.5f), 0f, Range(random, 9.5f, 10.1f));
+            return new Vector3((side == 1 ? -1f : 1f) * Range(random, 6.1f, 6.6f), 0f, Range(random, -1f, 10f));
+        }
+
+        private static Vector3 OutsideFenceSpot(Random random)
+        {
+            int side = random.Next(3);
+            if (side == 0) return new Vector3(Range(random, -8f, 8f), 0f, FenceBack + Range(random, 0.8f, 1.6f));
+            return new Vector3((side == 1 ? -1f : 1f) * (FenceHalfWidth + Range(random, 0.8f, 1.6f)), 0f, Range(random, -1f, 10f));
+        }
+
+        // the gravel plot (garden, barrel, bell) and the path
+        private static bool OnGravel(Vector3 spot)
+        {
+            bool plot = Mathf.Abs(spot.x) < 4.8f && spot.z > 0.4f && spot.z < 7.6f;
+            bool path = Mathf.Abs(spot.x) < 1.5f && spot.z < 0.6f && spot.z > -12.2f;
+            bool shed = spot.x < -3.4f && spot.x > -6.6f && spot.z > 6.8f && spot.z < 10f;
+            return plot || path || shed;
         }
 
         // ================= textures =================

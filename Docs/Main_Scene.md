@@ -36,3 +36,10 @@ Main menu → Play → Level 1 → intro → Start → plant / water / bell for 
 Rebuild order after a change: **Build Test_Garden Scene** first (it rebuilds the garden, bell and player prefabs), then **Build Main Scene**.
 
 Next step: replace the simple shapes by the free CC0 models of Quaternius (Stylized Nature MegaKit, LowPoly Crops Pack) in `Art/ThirdParty`.
+
+## Free 3D models (Art/ThirdParty, CC0)
+
+- `Quaternius_Nature`: 25 models and 10 textures of the **Stylized Nature MegaKit** (Standard, CC0): trees, pines, bushes, flowers, grass tufts, ferns, mushrooms, rocks, pebbles. The decor uses them automatically when they are present (simple shapes otherwise).
+- `Quaternius_Crops`: lettuce, beet (used for the radish), carrot, tomato and pumpkin of the **LowPoly Crops Pack** (CC0), 4 growth stages + crop. The test crops use them in `CropData.stageModels`; owner 2 can use the same models for the real crops.
+- `Scripts/Environment/Editor/ThirdPartyImport.cs` sets the import (one material per texture, textures at most 1024 px) and `Art/Shaders/Foliage.shader` draws leaves, grass and petals with cut-out on both sides. Menu **GardenWise > Fix Third-Party Materials** if leaves look like plain squares.
+- Only the models used are in the repo, to keep the Git LFS quota low. Credits: Quaternius (quaternius.com), CC0.

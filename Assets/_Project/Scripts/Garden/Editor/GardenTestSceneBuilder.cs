@@ -14,6 +14,7 @@ namespace GardenWise
         private const string ScenePath = "Assets/_Project/Scenes/Tests/Test_Garden.unity";
         private const string LevelPath = "Assets/_Project/Data/Levels/Test_Garden_Level.asset";
         private const string CropFolder = "Assets/_Project/Data/Crops";
+        private const string CropModelFolder = "Assets/_Project/Art/ThirdParty/Quaternius_Crops/Models";
         private const string PrefabFolder = "Assets/_Project/Prefabs/Garden";
         private const string ArtFolder = "Assets/_Project/Art/Garden";
 
@@ -43,8 +44,9 @@ namespace GardenWise
             // the player brings its own camera
             if (Camera.main != null) Object.DestroyImmediate(Camera.main.gameObject);
 
-            CropData radish = GetCrop("Radish", 4, 40f, 70f, "Radishes grow fast and like regular watering.");
-            CropData lettuce = GetCrop("Lettuce", 5, 50f, 80f, "Lettuce likes a soil that stays a bit wet.");
+            // test crops; models from the CC0 Crops Pack of Quaternius (no radish in the pack: the beet looks closest)
+            CropData radish = GetCrop("Radish", "Beet", 4, 40f, 70f, "Radishes grow fast and like regular watering.");
+            CropData lettuce = GetCrop("Lettuce", "Lettuce", 5, 50f, 80f, "Lettuce likes a soil that stays a bit wet.");
             CropData[] seeds = { radish, lettuce };
             LevelData level = GetTestLevel(seeds);
 
@@ -105,7 +107,7 @@ namespace GardenWise
         // ---------- data ----------
 
         // uses the real crop of owner 2 when it exists (same cropName), otherwise a test crop
-        private static CropData GetCrop(string cropName, int daysToGrow, float idealMin, float idealMax, string tip)
+        private static CropData GetCrop(string cropName, string modelName, int daysToGrow, float idealMin, float idealMax, string tip)
         {
             foreach (string guid in AssetDatabase.FindAssets("t:CropData"))
             {
@@ -131,8 +133,20 @@ namespace GardenWise
             crop.daysToGrow = daysToGrow;
             crop.maxHealth = 3;
             crop.tip = tip;
+            crop.stageModels = GetStageModels(modelName);
             EditorUtility.SetDirty(crop);
             return crop;
+        }
+
+        // Seed: no model (a small mound is shown), then the 4 growth models of the pack: _1 to _4
+        private static GameObject[] GetStageModels(string modelName)
+        {
+            GameObject[] models = new GameObject[5];
+            for (int stage = 1; stage <= 4; stage++)
+            {
+                models[stage] = AssetDatabase.LoadAssetAtPath<GameObject>(CropModelFolder + "/" + modelName + "_" + stage + ".fbx");
+            }
+            return models;
         }
 
         private static LevelData GetTestLevel(CropData[] seeds)
