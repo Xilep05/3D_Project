@@ -12,6 +12,7 @@ Menu **GardenWise > Build Main Scene** builds `Assets/_Project/Scenes/Main.unity
 | `Garden_3x3`, `DayBell`, `Player` | 3 | the ToolBelt shows the tool in the HUD, the Interactor waters through the WaterManager |
 | `InteractionFeedback` | 3 | inside the HUD panel: crosshair, tile aimed at, result of the last action |
 | `UI_Canvas` (menus, HUD, results, score) | 6 | MenuManager levels = `Level_FirstSprouts`, `Level_SummerDuo`; HUD barrel = WaterManager |
+| `Gaston_Dialogue` | 5 | under `UI_Canvas` (not in the HUD panel, so his models keep loading), top left under the HUD bar; reads the garden, water and weather. Only shows while playing, says the intro of each level |
 | `EventSystem` | - | needed by the menu buttons |
 
 ## Flow to check in Play mode
@@ -22,7 +23,6 @@ Main menu → Play → Level 1 → intro → Start → plant / water / bell for 
 
 - **Plants (owner 2):** the tiles still use `Plant_Placeholder`. Put the real plant prefab in the `plantPrefab` field of the tiles in `Garden_3x3`.
 - **Levels:** `allowedCrops` is empty in `Level_FirstSprouts` and `Level_SummerDuo`, so the seed bag uses the test radish and lettuce of the Player prefab. Add the real CropData assets to the levels.
-- **Gaston (owner 5):** no NPC or chat prefab on `main` yet. Add it here when `feature/gardener` is merged.
 
 ## Look of the game (shared by Main and Test_Garden)
 
@@ -52,3 +52,8 @@ Next step: replace the simple shapes by the free CC0 models of Quaternius (Styli
 - **Rain barrel** (owner 4's prefab, dressed in the scenes only): wooden staves and metal hoops around the gauge, the water level is seen from above. `RainBarrel` itself is unchanged.
 - **URP**: materials made by the builders use Standard or URP Lit depending on the active pipeline; `FoliageURP.shader` is the URP version of the foliage. `Scripts/Environment/Editor/URP` (compiled only when the URP package is installed) sets 4x MSAA, shadows, SSAO and a post-processing profile (`Art/Environment/PostFX_Profile.asset`: bloom, tone mapping, colour, white balance, vignette), adds a global Volume to each scene built and turns post-processing on for the cameras. Menu **GardenWise > Setup URP Look (open scene)** applies it to any open scene.
 - Switching to URP: Package Manager > Universal RP > Install, then Window > Rendering > Render Pipeline Converter > Built-in to URP (Rendering Settings + Material Upgrade) > Convert, then GardenWise > Fix Third-Party Materials and rebuild the scenes.
+
+## Gaston: controls
+
+- Gaston on desktop: **T** to type a question (Enter sends, Esc stops, the player stands still meanwhile), **V** held down to talk (Gaston listens while the key is down), **G** folds or unfolds the panel (the header arrow does the same). Gaston uses the default microphone of the computer, or the one named in the Microphone field of `GardenerVoice`.
+- Gaston answers with an online model when `Assets/StreamingAssets/ai_config.json` is filled in (see the README), else with the local model, else with written tips.

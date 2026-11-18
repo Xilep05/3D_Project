@@ -1,4 +1,6 @@
+using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace GardenWise
 {
@@ -14,6 +16,8 @@ namespace GardenWise
 
         private bool cursorLocked;
         private bool wasPlaying;
+        private bool typing;
+        private bool lockedBeforeTyping;
 
         private void Awake()
         {
@@ -44,14 +48,31 @@ namespace GardenWise
             if (!wasPlaying) SetCursorLocked(true);
             wasPlaying = true;
 
+            // typing in a text field of the UI (a question to Gaston): the keys go to the field, the player stands still
+            if (IsTypingInUI())
+            {
+                if (!typing) lockedBeforeTyping = cursorLocked;
+                typing = true;
+                if (cursorLocked) SetCursorLocked(false);
+                player.Move(Vector2.zero);
+                interactor.ClearAim();
+                return;
+            }
+
+            if (typing)
+            {
+                typing = false;
+                if (lockedBeforeTyping) SetCursorLocked(true);
+            }
+
             if (Input.GetKeyDown(KeyCode.Escape)) SetCursorLocked(false);
 
             if (!cursorLocked)
             {
                 player.Move(Vector2.zero);
                 interactor.ClearAim();
-                // first click takes the mouse back, it does not use the tool
-                if (Input.GetMouseButtonDown(0)) SetCursorLocked(true);
+                // first click takes the mouse back, it does not use the tool (a click on the UI stays on the UI)
+                if (Input.GetMouseButtonDown(0) && !IsPointerOverUI()) SetCursorLocked(true);
                 return;
             }
 
@@ -74,6 +95,18 @@ namespace GardenWise
             float wheel = Input.mouseScrollDelta.y;
             if (wheel > 0f) toolBelt.SelectNext(-1);
             else if (wheel < 0f) toolBelt.SelectNext(1);
+        }
+
+        private static bool IsTypingInUI()
+        {
+            GameObject selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
+            TMP_InputField field = selected != null ? selected.GetComponent<TMP_InputField>() : null;
+            return field != null && field.isFocused;
+        }
+
+        private static bool IsPointerOverUI()
+        {
+            return EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
         }
 
         // AZERTY (ZQSD) and QWERTY (WASD) keyboards both work, arrows too
