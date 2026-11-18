@@ -1,9 +1,11 @@
+using System;
 using System.Collections.Generic;
 using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using Object = UnityEngine.Object;
 
 namespace GardenWise
 {
@@ -43,7 +45,7 @@ namespace GardenWise
             if (Camera.main != null) Object.DestroyImmediate(Camera.main.gameObject);
 
             // decor, light, sky and fog shared with the test scenes
-            EnvironmentArt.CreateEnvironment();
+            GameObject environment = EnvironmentArt.CreateEnvironment();
             EnvironmentArt.ApplyLighting();
 
             // ---- systems ----
@@ -101,6 +103,9 @@ namespace GardenWise
 
             // ---- Gaston (owner 5) ----
             AddGaston(ui, grid, weather, water, missing);
+
+            // ---- VR: XR Origin of the XR Interaction Toolkit, used instead of the desktop player on the Quest ----
+            AddVR(player, environment, missing);
 
             if (Object.FindFirstObjectByType<EventSystem>() == null)
             {
@@ -200,6 +205,77 @@ namespace GardenWise
         // Gaston goes under the canvas, not in the HUD panel that is switched off outside the levels: he hides himself
         // there but keeps loading his models, and says the intro of each level. Top left, under the HUD bar
         // (the weather of the day is on the right)
+        // the same Main scene runs on desktop and on the Quest: PlatformSwitcher picks the player at start
+        private static void AddVR(GameObject player, GameObject environment, List<string> missing)
+        {
+            GameObject rigPrefab = FindXRRig();
+            if (rigPrefab == null || player == null)
+            {
+                missing.Add("XR Origin (XR Rig): import the Starter Assets sample of the XR Interaction Toolkit");
+                return;
+            }
+
+            GameObject rig = (GameObject)PrefabUtility.InstantiatePrefab(rigPrefab);
+            rig.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+            Camera head = rig.GetComponentInChildren<Camera>(true);
+
+            // a thin line from the right controller, yellow on a tile or the bell
+            GameObject pointerObject = new GameObject("Garden Pointer");
+            pointerObject.transform.SetParent(rig.transform, false);
+            LineRenderer line = pointerObject.AddComponent<LineRenderer>();
+            line.useWorldSpace = true;
+            line.widthMultiplier = 0.006f;
+            line.numCapVertices = 2;
+            line.sharedMaterial = PointerMaterial();
+            line.enabled = false;
+
+            XRGardenInput input = rig.AddComponent<XRGardenInput>();
+            SetReference(input, "toolBelt", player.GetComponent<ToolBelt>());
+            SetReference(input, "interactor", player.GetComponent<Interactor>());
+            SetReference(input, "rightController", XRGardenInput.FindRightController(rig.transform));
+            SetReference(input, "xrOrigin", rig.transform);
+            SetReference(input, "pointer", line);
+
+            // teleport anywhere on the ground (XR Interaction Toolkit 3, or 2 as a fallback)
+            Transform ground = environment != null ? environment.transform.Find("Ground") : null;
+            Type area = Type.GetType("UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation.TeleportationArea, Unity.XR.Interaction.Toolkit")
+                        ?? Type.GetType("UnityEngine.XR.Interaction.Toolkit.TeleportationArea, Unity.XR.Interaction.Toolkit");
+            if (ground != null && area != null && ground.GetComponent(area) == null) ground.gameObject.AddComponent(area);
+
+            PlatformSwitcher switcher = new GameObject("PlatformSwitcher").AddComponent<PlatformSwitcher>();
+            Camera desktopCamera = player.GetComponentInChildren<Camera>(true);
+            SetReference(switcher, "desktopCamera", desktopCamera != null ? desktopCamera.gameObject : null);
+            SetReference(switcher, "desktopBody", player.GetComponent<CharacterController>());
+            SetObjectArray(switcher, "desktopOnly", new Object[] { player.GetComponent<DesktopInput>(), player.GetComponent<PlayerController>() });
+            SetReference(switcher, "xrOrigin", rig);
+            SetReference(switcher, "xrHead", head != null ? head.transform : null);
+
+            // saved switched off: PlatformSwitcher turns it on when a headset is running
+            rig.SetActive(false);
+        }
+
+        private static GameObject FindXRRig()
+        {
+            foreach (string guid in AssetDatabase.FindAssets("XR Origin (XR Rig) t:Prefab"))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (path.Contains("Starter Assets")) return AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            }
+            return null;
+        }
+
+        private static Material PointerMaterial()
+        {
+            const string path = "Assets/_Project/Art/Garden/Mat_VRPointer.mat";
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null)
+            {
+                material = new Material(Shader.Find("Sprites/Default"));
+                AssetDatabase.CreateAsset(material, path);
+            }
+            return material;
+        }
+
         private static void AddGaston(GameObject ui, GardenGrid grid, WeatherSystem weather, WaterManager water, List<string> missing)
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(GastonPrefab);
