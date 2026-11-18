@@ -53,10 +53,9 @@ namespace GardenWise
                 return;
             }
 
-            // GARDENER_CHECK=main: the whole game (pixel style applied, Main rebuilt by its builder) instead of the test scene
+            // GARDENER_CHECK=main: the whole game (Main rebuilt by its builder) instead of the test scene
             if (Environment.GetEnvironmentVariable("GARDENER_CHECK") == "main")
             {
-                PixelStyle.ApplyToPrefabs();
                 MainSceneBuilder.Build();
                 EditorSceneManager.OpenScene(MainScenePath);
             }
@@ -205,12 +204,12 @@ namespace GardenWise
             string lastReply = "";
             dialogue.ReplyFinished += (text, source) => { lastReply = text; lastSource = source; };
 
-            // 1. the panel: top right, one third of the screen, pixel art, folds and unfolds
+            // 1. the panel: top right, one third of the screen, in the colours of the game's UI, folds and unfolds
             Check(root.anchorMin == Vector2.one && root.anchorMax == Vector2.one && root.pivot == Vector2.one, "the panel is anchored to the top right corner");
             Check(root.rect.width > 1920f * 0.3f && root.rect.width < 1920f * 0.36f, "the panel is about one third of the screen wide");
-            Check(bubble.type == Image.Type.Sliced && bubble.sprite != null && bubble.sprite.border == new Vector4(3f, 3f, 3f, 3f), "the bubble is a 9-slice pixel frame");
-            Check(bubble.sprite.texture.filterMode == FilterMode.Point, "the bubble pixels stay sharp (point filter)");
-            Check(reply.font != null && reply.font.name.Contains("Pixelify"), "the reply uses the pixel font");
+            Check(bubble.type == Image.Type.Sliced && bubble.sprite != null && bubble.sprite.name == "UISprite", "the bubble is a rounded panel, like the game's panels");
+            Check(ColorUtility.ToHtmlStringRGB(bubble.color) == "1C3D2B", "the bubble has the dark green of the game's panels");
+            Check(reply.font != null && reply.font == TMP_Settings.defaultFontAsset && reply.color == Color.white, "the reply uses the game's font, in white");
             Check(panel.IsOpen && body.gameObject.activeSelf, "the panel starts unfolded");
             Check(!waiting.activeSelf && !tagBackground.gameObject.activeSelf && !arrow.gameObject.activeSelf, "before any question: no loading icons, no tag, no arrow");
             Check(reply.GetParsedText().Contains("Pose-moi une question"), "before any question: Gaston invites the player to ask");
@@ -272,13 +271,12 @@ namespace GardenWise
             Check(waiting.activeSelf && !reply.gameObject.activeSelf && !tagBackground.gameObject.activeSelf && dialogue.IsAnswering, "while the AI thinks: loading icons, no reply, no tag");
 
             Image[] slots = waiting.GetComponentsInChildren<Image>();
-            Check(slots.Length == 3 && slots.All(slot => slot.enabled && slot.sprite != null) && slots.Select(slot => slot.sprite).Distinct().Count() == 3, "three different loading icons are shown");
-            Check(slots.All(slot => slot.sprite.texture.filterMode == FilterMode.Point), "the loading icons are sharp pixel art");
+            Check(slots.Length == 3 && slots.All(slot => slot.enabled && slot.sprite != null), "three loading dots are shown");
             Capture("GardenerSelfCheck_thinking.png");
 
             pushPartial("Ta [vert]lai");
             Check(!waiting.activeSelf && reply.gameObject.activeSelf && tagText.text.Contains("IA locale"), "the first words replace the loading icons, tagged local AI");
-            Check(reply.text.Contains("<color=#2F7D32>") && !reply.text.Contains("[vert]"), "a keyword is coloured as soon as it starts");
+            Check(reply.text.Contains("<color=#9BE07A>") && !reply.text.Contains("[vert]"), "a keyword is coloured (light green on the dark panel) as soon as it starts");
             pushPartial("Ta [vert]laitue[/vert] a soif. [o");
             Check(!reply.text.Contains("[o"), "half a marker is never shown");
 

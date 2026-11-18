@@ -171,8 +171,6 @@ namespace GardenWise
             target.text = "";
             message.text = "";
 
-            PixelStyle.StyleTextsOverWorld(root);
-
             InteractionFeedback feedback = root.AddComponent<InteractionFeedback>();
             SetReference(feedback, "interactor", interactor);
             SetReference(feedback, "targetText", target);

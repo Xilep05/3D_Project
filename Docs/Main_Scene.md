@@ -24,8 +24,7 @@ Main menu → Play → Level 1 → intro → Start → plant / water / bell for 
 - **Plants (owner 2):** the tiles still use `Plant_Placeholder`. Put the real plant prefab in the `plantPrefab` field of the tiles in `Garden_3x3`.
 - **Levels:** `allowedCrops` is empty in `Level_FirstSprouts` and `Level_SummerDuo`, so the seed bag uses the test radish and lettuce of the Player prefab. Add the real CropData assets to the levels.
 
-## Look and controls
+## Gaston: controls
 
-- The menus, the HUD and the weather panels use Gaston's pixel-art style: menu **GardenWise > Apply pixel style to the UI** (`Scripts/UI/Editor/PixelStyle.cs`) restyles `UI_Canvas` and `WeatherBoard` again after a change to them.
 - Gaston on desktop: **T** to type a question (Enter sends, Esc stops, the player stands still meanwhile), **V** held down to talk. The header opens and folds the panel.
 - Gaston answers with an online model when `Assets/StreamingAssets/ai_config.json` is filled in (see the README), else with the local model, else with written tips.

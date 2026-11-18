@@ -1,5 +1,4 @@
 using System.IO;
-using System.Linq;
 using LLMUnity;
 using TMPro;
 using UnityEditor;
@@ -8,7 +7,6 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
-using UnityEngine.TextCore.LowLevel;
 using UnityEngine.UI;
 
 namespace GardenWise
@@ -22,21 +20,17 @@ namespace GardenWise
         public const string ArtFolder = "Assets/_Project/Art/Gardener";
 
         private const string UiFolder = ArtFolder + "/UI";
-        private const string IconsFolder = ArtFolder + "/ThinkingIcons";
-        private const string FontFilePath = ArtFolder + "/Fonts/PixelifySans.ttf";
-        private const string FontAssetPath = ArtFolder + "/Fonts/PixelifySans SDF.asset";
         private const string PluginFolder = "Assets/_Project/Plugins/SherpaOnnx";
 
-        // the GardenWise palette and frames are shared with the rest of the UI (PixelStyle)
-        private const float FrameScale = PixelStyle.FrameScale;
-        private static readonly Color32 Ink = PixelStyle.Ink;
-        private static readonly Color32 SoftInk = PixelStyle.SoftInk;
-        private static readonly Color32 Cream = PixelStyle.Cream;
-        private static readonly Color32 LeafGreen = PixelStyle.LeafGreen;
-        private static readonly Color32 Sky = PixelStyle.Sky;
-        private static readonly Color32 Grass = PixelStyle.Grass;
+        // the colours of the game's UI (UI_Canvas, owner 6): Gaston looks like the rest of the game
+        private static readonly Color32 PanelGreen = new Color32(0x1C, 0x3D, 0x2B, 0xEB);
+        private static readonly Color32 ButtonGreen = new Color32(0x40, 0x85, 0x47, 0xFF);
+        private static readonly Color32 MutedText = new Color32(0xC9, 0xDC, 0xCB, 0xFF);
 
-        private static TMP_FontAsset pixelFont;
+        // only the backdrop of the test scene
+        private static readonly Color32 Sky = new Color32(0xBF, 0xE3, 0xF2, 0xFF);
+        private static readonly Color32 Grass = new Color32(0x8F, 0xCF, 0x6A, 0xFF);
+
 
         // from the command line: Unity -batchmode -executeMethod GardenWise.GardenerBuilder.Build  (no -quit)
         public static void Build()
@@ -80,7 +74,6 @@ namespace GardenWise
         private static void PrepareAssets()
         {
             ConfigureVoiceLibrary();
-            pixelFont = GetPixelFont();
         }
 
         // ------------------------------------------------------------------ prefab
@@ -124,44 +117,42 @@ namespace GardenWise
 
             // --- header: always visible, folds and unfolds the rest
             RectTransform header = AddRect("Header", root, 0f, 0f, 636f, 72f);
-            AddFrame(header, UiFolder + "/gaston_badge.png");
-            AddSprite(AddRect("Emblem", header, 18f, 12f, 48f, 48f), IconsFolder + "/08_sunflower.png");
-            AddText(AddRect("NameText", header, 78f, 0f, 220f, 72f), "Gaston", 34f, Cream, TextAlignmentOptions.MidlineLeft);
-            TextMeshProUGUI counter = AddText(AddRect("CounterText", header, 300f, 0f, 192f, 72f), "Questions : 0", 20f, Cream, TextAlignmentOptions.MidlineRight);
+            AddFrame(header, ButtonGreen);
+            AddText(AddRect("NameText", header, 24f, 0f, 260f, 72f), "Gaston", 34f, Color.white, TextAlignmentOptions.MidlineLeft);
+            TextMeshProUGUI counter = AddText(AddRect("CounterText", header, 300f, 0f, 192f, 72f), "Questions : 0", 22f, Color.white, TextAlignmentOptions.MidlineRight);
 
-            Image micIcon = AddSprite(AddRect("MicButton", header, 510f, 12f, 48f, 48f), UiFolder + "/icon_mic.png");
-            Button micButton = AddButton(micIcon, Cream);
-            Image foldIcon = AddSprite(AddRect("FoldButton", header, 570f, 12f, 48f, 48f), UiFolder + "/icon_chevron.png");
+            Image micIcon = AddSprite(AddRect("MicButton", header, 510f, 14f, 44f, 44f), UiFolder + "/icon_mic.png");
+            Button micButton = AddButton(micIcon, Color.white);
+            Image foldIcon = AddSprite(AddRect("FoldButton", header, 570f, 14f, 44f, 44f), UiFolder + "/icon_chevron.png");
             foldIcon.rectTransform.pivot = new Vector2(0.5f, 0.5f);
             foldIcon.rectTransform.anchoredPosition = new Vector2(594f, -36f);
-            Button foldButton = AddButton(foldIcon, Cream);
+            Button foldButton = AddButton(foldIcon, Color.white);
 
             // --- body: clipped by a mask so it can unroll
             RectTransform body = AddRect("Body", root, 0f, 80f, 636f, 428f);
             body.gameObject.AddComponent<RectMask2D>();
 
             RectTransform bubble = AddRect("Bubble", body, 0f, 0f, 636f, 360f);
-            AddFrame(bubble, UiFolder + "/gaston_bubble.png");
+            AddFrame(bubble, PanelGreen);
 
-            TextMeshProUGUI question = AddText(AddRect("QuestionText", bubble, 30f, 18f, 400f, 30f), "", 20f, SoftInk, TextAlignmentOptions.MidlineLeft);
+            TextMeshProUGUI question = AddText(AddRect("QuestionText", bubble, 30f, 18f, 400f, 30f), "", 20f, MutedText, TextAlignmentOptions.MidlineLeft);
             question.textWrappingMode = TextWrappingModes.NoWrap;
             question.overflowMode = TextOverflowModes.Ellipsis;
 
-            TextMeshProUGUI reply = AddText(AddRect("ReplyText", bubble, 30f, 58f, 576f, 262f), "", 30f, Ink, TextAlignmentOptions.TopLeft);
+            TextMeshProUGUI reply = AddText(AddRect("ReplyText", bubble, 30f, 58f, 576f, 262f), "", 30f, Color.white, TextAlignmentOptions.TopLeft);
             reply.enableAutoSizing = true;
             reply.fontSizeMin = 20f;
             reply.fontSizeMax = 30f;
 
             Image arrow = AddSprite(AddRect("MoreArrow", bubble, 582f, 312f, 24f, 24f), UiFolder + "/icon_chevron.png");
-            arrow.color = LeafGreen;
+            arrow.color = MutedText;
             arrow.gameObject.SetActive(false);
 
             // tag "IA locale" / "Hors ligne", sized by its text
             RectTransform tag = AddRect("Tag", bubble, 0f, 0f, 0f, 0f);
             tag.anchorMin = tag.anchorMax = tag.pivot = Vector2.one;
             tag.anchoredPosition = new Vector2(-24f, -16f);
-            Image tagBackground = tag.gameObject.AddComponent<Image>();
-            tagBackground.raycastTarget = false;
+            Image tagBackground = AddFrame(tag, Color.white);
 
             HorizontalLayoutGroup tagLayout = tag.gameObject.AddComponent<HorizontalLayoutGroup>();
             tagLayout.padding = new RectOffset(12, 12, 3, 3);
@@ -175,20 +166,22 @@ namespace GardenWise
             tagFitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
             tagFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-            TextMeshProUGUI tagText = AddText(AddRect("TagText", tag, 0f, 0f, 0f, 0f), "IA locale", 18f, LeafGreen, TextAlignmentOptions.Center);
+            TextMeshProUGUI tagText = AddText(AddRect("TagText", tag, 0f, 0f, 0f, 0f), "IA locale", 18f, PanelGreen, TextAlignmentOptions.Center);
             tagText.textWrappingMode = TextWrappingModes.NoWrap;
             tag.gameObject.SetActive(false);
 
-            // waiting: three hopping icons and a short text
+            // waiting: three hopping dots and a short text
+            Sprite dot = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
             RectTransform waiting = AddRect("Waiting", bubble, 30f, 110f, 576f, 140f);
             Image[] slots = new Image[3];
             for (int i = 0; i < slots.Length; i++)
             {
-                slots[i] = AddRect("Icon" + (i + 1), waiting, i * 72f, 40f, 60f, 60f).gameObject.AddComponent<Image>();
+                slots[i] = AddRect("Dot" + (i + 1), waiting, i * 40f, 56f, 26f, 26f).gameObject.AddComponent<Image>();
+                slots[i].sprite = dot;
                 slots[i].raycastTarget = false;
             }
 
-            TextMeshProUGUI waitingText = AddText(AddRect("WaitingText", waiting, 228f, 0f, 348f, 140f), "Gaston réfléchit…", 26f, Ink, TextAlignmentOptions.MidlineLeft);
+            TextMeshProUGUI waitingText = AddText(AddRect("WaitingText", waiting, 140f, 0f, 436f, 140f), "Gaston réfléchit…", 26f, Color.white, TextAlignmentOptions.MidlineLeft);
             waiting.gameObject.SetActive(false);
 
             TMP_InputField input = AddInputField(body, "QuestionInput", "Pourquoi ma laitue va mal ?");
@@ -204,7 +197,7 @@ namespace GardenWise
             SetReference(panel, "waitingGroup", waiting.gameObject);
             SetReference(panel, "waitingText", waitingText);
             SetReferences(panel, "iconSlots", slots);
-            SetReferences(panel, "thinkingIcons", LoadSprites(IconsFolder));
+            SetReferences(panel, "thinkingIcons", new Object[] { dot });
             SetReference(panel, "tagBackground", tagBackground);
             SetReference(panel, "tagText", tagText);
             SetReference(panel, "inputField", input);
@@ -264,7 +257,7 @@ namespace GardenWise
             RectTransform title = AddRect("Title", canvas, 0f, 0f, 1000f, 50f);
             title.anchorMin = title.anchorMax = title.pivot = Vector2.zero;
             title.anchoredPosition = new Vector2(30f, 20f);
-            AddText(title, "Test_Gardener", 28f, LeafGreen, TextAlignmentOptions.BottomLeft);
+            AddText(title, "Test_Gardener", 28f, ButtonGreen, TextAlignmentOptions.BottomLeft);
 
             // the prefab sits where it will be in the game: top right, one third of the screen
             GameObject instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, canvas);
@@ -279,41 +272,6 @@ namespace GardenWise
         }
 
         // ------------------------------------------------------------------ fonts, plugins, model library
-
-        // makes the TextMesh Pro font from PixelifySans.ttf the first time; without the file the default font is used
-        private static TMP_FontAsset GetPixelFont()
-        {
-            TMP_FontAsset existing = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontAssetPath);
-            if (existing != null) return existing;
-
-            Font font = AssetDatabase.LoadAssetAtPath<Font>(FontFilePath);
-            if (font == null)
-            {
-                Debug.LogWarning("[Gaston] " + FontFilePath + " not found: the default font is used.");
-                return null;
-            }
-
-            TMP_FontAsset fontAsset = TMP_FontAsset.CreateFontAsset(font, 64, 6, GlyphRenderMode.SDFAA, 2048, 1024, AtlasPopulationMode.Dynamic, false);
-
-            // every character French and English need, drawn once so the asset never changes afterwards
-            string characters = "";
-            for (int code = 32; code <= 126; code++) characters += (char)code;
-            for (int code = 160; code <= 255; code++) characters += (char)code;
-            characters += "œŒ…’‘“”–—€•";
-
-            string missing;
-            fontAsset.TryAddCharacters(characters, out missing);
-            fontAsset.atlasPopulationMode = AtlasPopulationMode.Static;
-
-            AssetDatabase.CreateAsset(fontAsset, FontAssetPath);
-            fontAsset.material.name = "PixelifySans SDF Material";
-            fontAsset.atlasTexture.name = "PixelifySans SDF Atlas";
-            AssetDatabase.AddObjectToAsset(fontAsset.material, fontAsset);
-            AssetDatabase.AddObjectToAsset(fontAsset.atlasTexture, fontAsset);
-            EditorUtility.SetDirty(fontAsset);
-            AssetDatabase.SaveAssets();
-            return fontAsset;
-        }
 
         // the voice library (sherpa-onnx 2.0.1), one copy per system: Windows x86_64 and macOS Apple Silicon,
         // each used by the editor and the build of its own system only
@@ -392,11 +350,13 @@ namespace GardenWise
             return image;
         }
 
-        // a pixel frame that keeps its corners and stretches its middle (9-slice)
-        private static Image AddFrame(RectTransform rect, string spritePath)
+        // a rounded panel like the buttons and panels of the game (Unity's default UI sprite, 9-slice)
+        private static Image AddFrame(RectTransform rect, Color colour)
         {
-            Image image = AddSprite(rect, spritePath);
-            PixelStyle.Frame(image, spritePath);
+            Image image = rect.gameObject.AddComponent<Image>();
+            image.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+            image.type = Image.Type.Sliced;
+            image.color = colour;
             image.raycastTarget = false;
             return image;
         }
@@ -414,7 +374,6 @@ namespace GardenWise
         private static TextMeshProUGUI AddText(RectTransform rect, string content, float size, Color color, TextAlignmentOptions alignment)
         {
             TextMeshProUGUI text = rect.gameObject.AddComponent<TextMeshProUGUI>();
-            if (pixelFont != null) text.font = pixelFont;
             text.text = content;
             text.fontSize = size;
             text.color = color;
@@ -425,7 +384,7 @@ namespace GardenWise
 
         private static TMP_InputField AddInputField(Transform parent, string name, string placeholder)
         {
-            Sprite fieldSprite = AssetDatabase.LoadAssetAtPath<Sprite>(UiFolder + "/gaston_field.png");
+            Sprite fieldSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
             GameObject inputObject = TMP_DefaultControls.CreateInputField(new TMP_DefaultControls.Resources { inputField = fieldSprite });
             inputObject.name = name;
             foreach (Transform child in inputObject.GetComponentsInChildren<Transform>(true)) child.gameObject.layer = LayerMask.NameToLayer("UI");
@@ -439,52 +398,33 @@ namespace GardenWise
             Image background = inputObject.GetComponent<Image>();
             background.sprite = fieldSprite;
             background.type = Image.Type.Sliced;
-            background.pixelsPerUnitMultiplier = FrameScale;
-            background.color = Color.white;
+            background.color = PanelGreen;
 
             TMP_InputField input = inputObject.GetComponent<TMP_InputField>();
             input.lineType = TMP_InputField.LineType.SingleLine;
             input.characterLimit = 200;
             input.customCaretColor = true;
-            input.caretColor = Ink;
+            input.caretColor = Color.white;
             input.caretWidth = 3;
-            input.selectionColor = new Color32(0xC0, 0xDD, 0x97, 0xFF);
+            input.selectionColor = ButtonGreen;
 
             TMP_Text text = input.textComponent;
             TMP_Text placeholderText = (TMP_Text)input.placeholder;
-            if (pixelFont != null)
-            {
-                input.fontAsset = pixelFont;
-                text.font = pixelFont;
-                placeholderText.font = pixelFont;
-            }
 
             text.fontSize = 26f;
-            text.color = Ink;
+            text.color = Color.white;
             text.alignment = TextAlignmentOptions.MidlineLeft;
 
             placeholderText.text = placeholder;
             placeholderText.fontSize = 26f;
             placeholderText.fontStyle = FontStyles.Normal;
-            placeholderText.color = new Color32(0x3A, 0x2A, 0x1E, 0x80);
+            placeholderText.color = new Color(1f, 1f, 1f, 0.5f);
             placeholderText.alignment = TextAlignmentOptions.MidlineLeft;
 
             // the default margins are made for a 30 px high field
             input.textViewport.offsetMin = new Vector2(24f, 6f);
             input.textViewport.offsetMax = new Vector2(-24f, -6f);
             return input;
-        }
-
-        // every sprite of a folder, in the order of the file names
-        private static Sprite[] LoadSprites(string folder)
-        {
-            return AssetDatabase.FindAssets("t:Sprite", new[] { folder })
-                .Select(AssetDatabase.GUIDToAssetPath)
-                .Distinct()
-                .OrderBy(path => path)
-                .Select(AssetDatabase.LoadAssetAtPath<Sprite>)
-                .Where(sprite => sprite != null)
-                .ToArray();
         }
 
         // fills a private [SerializeField] the same way the Inspector does
@@ -532,7 +472,7 @@ namespace GardenWise
         }
     }
 
-    // any picture dropped in Art/Gardener becomes a crisp pixel art sprite the first time Unity sees it
+    // any picture dropped in Art/Gardener becomes a smooth UI sprite the first time Unity sees it
     public class GardenerArtImporter : AssetPostprocessor
     {
         // a voice sample must stay readable by script: Pocket TTS copies the voice from its sound data
@@ -560,8 +500,8 @@ namespace GardenWise
 
             importer.textureType = TextureImporterType.Sprite;
             importer.spriteImportMode = SpriteImportMode.Single;
-            importer.spritePixelsPerUnit = 12.5f;
-            importer.filterMode = FilterMode.Point;
+            importer.spritePixelsPerUnit = 100f;
+            importer.filterMode = FilterMode.Bilinear;
             importer.textureCompression = TextureImporterCompression.Uncompressed;
             importer.mipmapEnabled = false;
             importer.alphaIsTransparency = true;

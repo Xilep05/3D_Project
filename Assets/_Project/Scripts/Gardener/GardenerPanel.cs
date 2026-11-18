@@ -47,8 +47,8 @@ namespace GardenWise
         [SerializeField] private TMP_Text tagText;
 
         [Header("Keyword colours: [vert]word[/vert] and [or]word[/or]")]
-        [SerializeField] private Color keywordGreen = new Color32(0x2F, 0x7D, 0x32, 0xFF);
-        [SerializeField] private Color keywordGold = new Color32(0xB2, 0x6A, 0x00, 0xFF);
+        [SerializeField] private Color keywordGreen = new Color32(0x9B, 0xE0, 0x7A, 0xFF);
+        [SerializeField] private Color keywordGold = new Color32(0xFF, 0xCC, 0x33, 0xFF);
 
         [Header("Input")]
         [SerializeField] private TMP_InputField inputField;
@@ -65,14 +65,16 @@ namespace GardenWise
         [SerializeField] private KeyCode typeKey = KeyCode.T;
         [SerializeField] private KeyCode talkKey = KeyCode.V;
 
-        private static readonly Color32 Cream = new Color32(0xFF, 0xF8, 0xE7, 0xFF);
-        private static readonly Color32 Sun = new Color32(0xF5, 0xC5, 0x42, 0xFF);
-        private static readonly Color32 AiTagBack = new Color32(0xDC, 0xEF, 0xC9, 0xFF);
-        private static readonly Color32 AiTagText = new Color32(0x2F, 0x6B, 0x2F, 0xFF);
-        private static readonly Color32 OfflineTagBack = new Color32(0xF3, 0xD3, 0xC2, 0xFF);
-        private static readonly Color32 OfflineTagText = new Color32(0x8F, 0x3D, 0x1C, 0xFF);
-        private static readonly Color32 NoticeTagBack = new Color32(0xEA, 0xE4, 0xD0, 0xFF);
-        private static readonly Color32 NoticeTagText = new Color32(0x3A, 0x2A, 0x1E, 0xFF);
+        // the colours of the game's UI (UI_Canvas): dark green panels, green buttons, gold stars, white text
+        private static readonly Color32 PanelGreen = new Color32(0x1C, 0x3D, 0x2B, 0xFF);
+        private static readonly Color32 ButtonGreen = new Color32(0x40, 0x85, 0x47, 0xFF);
+        private static readonly Color32 Gold = new Color32(0xFF, 0xCC, 0x33, 0xFF);
+        private static readonly Color32 AiTagBack = Gold;
+        private static readonly Color32 AiTagText = PanelGreen;
+        private static readonly Color32 OfflineTagBack = new Color32(0xFF, 0xFF, 0xFF, 0x33);
+        private static readonly Color32 OfflineTagText = new Color32(0xFF, 0xFF, 0xFF, 0xFF);
+        private static readonly Color32 NoticeTagBack = ButtonGreen;
+        private static readonly Color32 NoticeTagText = new Color32(0xFF, 0xFF, 0xFF, 0xFF);
 
         public bool IsOpen { get; private set; }
 
@@ -247,12 +249,12 @@ namespace GardenWise
             ApplyFold();
         }
 
-        // the body unrolls in a few steps, like a menu of an old console game
+        // the body unrolls smoothly from under the header
         private void ApplyFold()
         {
-            float stepped = Mathf.Round(fold * 5f) / 5f;
-            body.sizeDelta = new Vector2(body.sizeDelta.x, bodyHeight * stepped);
-            body.gameObject.SetActive(stepped > 0f || IsOpen);
+            float eased = fold * fold * (3f - 2f * fold);
+            body.sizeDelta = new Vector2(body.sizeDelta.x, bodyHeight * eased);
+            body.gameObject.SetActive(eased > 0f || IsOpen);
             if (foldArrow != null) foldArrow.localScale = new Vector3(1f, IsOpen ? -1f : 1f, 1f);
         }
 
@@ -429,7 +431,7 @@ namespace GardenWise
             if (voice == null || voice.State == shownVoiceState) return;
 
             shownVoiceState = voice.State;
-            if (micIcon != null) micIcon.color = shownVoiceState == GardenerVoice.VoiceState.Listening ? Sun : Cream;
+            if (micIcon != null) micIcon.color = shownVoiceState == GardenerVoice.VoiceState.Listening ? Gold : Color.white;
 
             if (shownVoiceState == GardenerVoice.VoiceState.Listening)
             {
