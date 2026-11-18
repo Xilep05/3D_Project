@@ -271,7 +271,7 @@ namespace GardenWise
             Check(waiting.activeSelf && !reply.gameObject.activeSelf && !tagBackground.gameObject.activeSelf && dialogue.IsAnswering, "while the AI thinks: loading icons, no reply, no tag");
 
             Image[] slots = waiting.GetComponentsInChildren<Image>();
-            Check(slots.Length == 3 && slots.All(slot => slot.enabled && slot.sprite != null), "three loading dots are shown");
+            Check(slots.Length == 3 && slots.All(slot => slot.enabled && slot.sprite != null) && slots.Select(slot => slot.sprite).Distinct().Count() == 3, "three different fruits and vegetables hop while Gaston thinks");
             Capture("GardenerSelfCheck_thinking.png");
 
             pushPartial("Ta [vert]lai");

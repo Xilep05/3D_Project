@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using LLMUnity;
 using TMPro;
 using UnityEditor;
@@ -20,6 +21,7 @@ namespace GardenWise
         public const string ArtFolder = "Assets/_Project/Art/Gardener";
 
         private const string UiFolder = ArtFolder + "/UI";
+        private const string IconsFolder = ArtFolder + "/ThinkingIcons";
         private const string PluginFolder = "Assets/_Project/Plugins/SherpaOnnx";
 
         // the colours of the game's UI (UI_Canvas, owner 6): Gaston looks like the rest of the game
@@ -170,18 +172,16 @@ namespace GardenWise
             tagText.textWrappingMode = TextWrappingModes.NoWrap;
             tag.gameObject.SetActive(false);
 
-            // waiting: three hopping dots and a short text
-            Sprite dot = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
+            // waiting: three hopping fruits and vegetables (ThinkingIcons) and a short text
             RectTransform waiting = AddRect("Waiting", bubble, 30f, 110f, 576f, 140f);
             Image[] slots = new Image[3];
             for (int i = 0; i < slots.Length; i++)
             {
-                slots[i] = AddRect("Dot" + (i + 1), waiting, i * 40f, 56f, 26f, 26f).gameObject.AddComponent<Image>();
-                slots[i].sprite = dot;
+                slots[i] = AddRect("Icon" + (i + 1), waiting, i * 72f, 40f, 60f, 60f).gameObject.AddComponent<Image>();
                 slots[i].raycastTarget = false;
             }
 
-            TextMeshProUGUI waitingText = AddText(AddRect("WaitingText", waiting, 140f, 0f, 436f, 140f), "Gaston réfléchit…", 26f, Color.white, TextAlignmentOptions.MidlineLeft);
+            TextMeshProUGUI waitingText = AddText(AddRect("WaitingText", waiting, 228f, 0f, 348f, 140f), "Gaston réfléchit…", 26f, Color.white, TextAlignmentOptions.MidlineLeft);
             waiting.gameObject.SetActive(false);
 
             TMP_InputField input = AddInputField(body, "QuestionInput", "Pourquoi ma laitue va mal ?");
@@ -197,7 +197,7 @@ namespace GardenWise
             SetReference(panel, "waitingGroup", waiting.gameObject);
             SetReference(panel, "waitingText", waitingText);
             SetReferences(panel, "iconSlots", slots);
-            SetReferences(panel, "thinkingIcons", new Object[] { dot });
+            SetReferences(panel, "thinkingIcons", LoadSprites(IconsFolder));
             SetReference(panel, "tagBackground", tagBackground);
             SetReference(panel, "tagText", tagText);
             SetReference(panel, "inputField", input);
@@ -427,6 +427,18 @@ namespace GardenWise
             return input;
         }
 
+        // every sprite of a folder, in the order of the file names
+        private static Object[] LoadSprites(string folder)
+        {
+            return AssetDatabase.FindAssets("t:Sprite", new[] { folder })
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .Distinct()
+                .OrderBy(path => path)
+                .Select(AssetDatabase.LoadAssetAtPath<Sprite>)
+                .Where(sprite => sprite != null)
+                .ToArray<Object>();
+        }
+
         // fills a private [SerializeField] the same way the Inspector does
         private static void SetReference(Object target, string fieldName, Object value)
         {
@@ -472,7 +484,7 @@ namespace GardenWise
         }
     }
 
-    // any picture dropped in Art/Gardener becomes a smooth UI sprite the first time Unity sees it
+    // any picture dropped in Art/Gardener becomes a UI sprite the first time Unity sees it
     public class GardenerArtImporter : AssetPostprocessor
     {
         // a voice sample must stay readable by script: Pocket TTS copies the voice from its sound data
@@ -500,8 +512,10 @@ namespace GardenWise
 
             importer.textureType = TextureImporterType.Sprite;
             importer.spriteImportMode = SpriteImportMode.Single;
-            importer.spritePixelsPerUnit = 100f;
-            importer.filterMode = FilterMode.Bilinear;
+            // the thinking icons are little pixel-art fruits: kept sharp. The rest (icons of the panel) is smooth
+            bool pixelArt = assetPath.StartsWith(GardenerBuilder.ArtFolder + "/ThinkingIcons/");
+            importer.spritePixelsPerUnit = pixelArt ? 12.5f : 100f;
+            importer.filterMode = pixelArt ? FilterMode.Point : FilterMode.Bilinear;
             importer.textureCompression = TextureImporterCompression.Uncompressed;
             importer.mipmapEnabled = false;
             importer.alphaIsTransparency = true;
