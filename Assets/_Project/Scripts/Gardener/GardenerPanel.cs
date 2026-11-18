@@ -218,6 +218,7 @@ namespace GardenWise
                 talkKeyHeld = true;
                 Open();
                 voice.StartListening();
+                ShowVoiceProblem();
             }
             else if (talkKeyHeld && Input.GetKeyUp(talkKey))
             {
@@ -425,7 +426,22 @@ namespace GardenWise
         // for the microphone button: one click to talk, one click when finished
         public void ToggleMicrophone()
         {
-            if (voice != null) voice.ToggleListening();
+            if (voice == null) return;
+            voice.ToggleListening();
+            ShowVoiceProblem();
+        }
+
+        // the microphone did not start (models still loading, no microphone, refused by the system): say why at once,
+        // otherwise the panel opens and nothing happens
+        private void ShowVoiceProblem()
+        {
+            if (voice.State != GardenerVoice.VoiceState.Idle || voice.LastProblem.Length == 0 || dialogue.IsAnswering) return;
+            Open();
+            replyIsFinal = false;
+            questionText.text = "";
+            tagBackground.gameObject.SetActive(false);
+            SetReply(voice.LastProblem, false);
+            SkipTypewriter();
         }
 
         private void UpdateVoiceState()
@@ -440,7 +456,9 @@ namespace GardenWise
                 Open();
                 questionText.text = "";
                 tagBackground.gameObject.SetActive(false);
-                ShowWaiting(IsEnglish() ? "I'm listening… click the mic when you're done." : "Je t'écoute… reclique sur le micro quand tu as fini.", false);
+                ShowWaiting(talkKeyHeld
+                    ? (IsEnglish() ? "I'm listening… release " + talkKey + " when you're done." : "Je t'écoute… relâche " + talkKey + " quand tu as fini.")
+                    : (IsEnglish() ? "I'm listening… click the mic when you're done." : "Je t'écoute… reclique sur le micro quand tu as fini."), false);
             }
             else if (shownVoiceState == GardenerVoice.VoiceState.Transcribing)
             {

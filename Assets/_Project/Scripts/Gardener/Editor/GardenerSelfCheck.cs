@@ -348,6 +348,7 @@ namespace GardenWise
 
             // 6. the voice
             await CheckVoice(voice, false);
+            await CheckMicrophoneButton(voice, panel);
 
             // 7. a new level resets the count
             GameEvents.RaiseGameStateChanged(GameState.LevelIntro);
@@ -598,6 +599,38 @@ namespace GardenWise
         }
 
         // GARDENER_CHECK=voicelab: the same reply with several settings of the chosen voice, to compare by ear
+        // the microphone button either listens (icon in gold) or says at once why it cannot: never a silent click
+        private static async Task CheckMicrophoneButton(GardenerVoice voice, GardenerPanel panel)
+        {
+            TMP_Text reply = Field<TMP_Text>(panel, "replyText");
+            Image micIcon = Field<Image>(panel, "micIcon");
+            panel.ToggleMicrophone();
+            await Task.Delay(200);
+
+            if (voice.State == GardenerVoice.VoiceState.Listening)
+            {
+                Check(micIcon != null && micIcon.color == (Color)new Color32(0xFF, 0xCC, 0x33, 0xFF), "the mic icon turns gold while listening");
+                panel.ToggleMicrophone();
+                await WaitUntil(() => voice.State == GardenerVoice.VoiceState.Idle, 30f);
+                Check(voice.State == GardenerVoice.VoiceState.Idle, "the mic stops listening on a second click");
+            }
+            else
+            {
+                Check(voice.LastProblem.Length > 0 && reply != null && reply.gameObject.activeSelf && reply.text.Contains(voice.LastProblem.Substring(0, 12)),
+                    "a microphone that cannot start says why in the bubble (" + voice.LastProblem + ")");
+            }
+
+            // a click before the models are ready is answered at once too (as on a slow PC right after the level starts)
+            System.Reflection.FieldInfo loaded = typeof(GardenerVoice).GetField("<ModelsLoaded>k__BackingField",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            if (loaded == null) return;
+            loaded.SetValue(voice, false);
+            panel.ToggleMicrophone();
+            loaded.SetValue(voice, true);
+            Check(voice.State == GardenerVoice.VoiceState.Idle && reply != null && reply.gameObject.activeSelf && reply.text.Contains("réessaie"),
+                "a click while the models load says to try again (" + (reply != null ? reply.text : "no bubble") + ")");
+        }
+
         private static async Task CompareVoiceSettings(GardenerVoice voice)
         {
             await WaitUntil(() => voice.ModelsLoaded, 240f);

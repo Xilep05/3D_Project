@@ -208,6 +208,7 @@ namespace GardenWise
 
             if (destroyed) return;
             if (tts != null && sampleAudio == null) problem += " No voice sample on GardenerVoice: Gaston cannot speak.";
+            if (OpenedFromUnityHub) problem += " " + PermissionHint;
 
             ModelsLoaded = true;
             Status = "speaking " + (CanSpeak ? "ready (" + speakFolder + ")" : "off") +
@@ -280,6 +281,12 @@ namespace GardenWise
             if (State != VoiceState.Idle) return;
 
             LastProblem = "";
+            if (!ModelsLoaded)
+            {
+                LastProblem = Say("Mes oreilles se réveillent… réessaie dans quelques secondes !", "My ears are waking up… try again in a few seconds!");
+                return;
+            }
+
             if (recognizer == null)
             {
                 LastProblem = Say("Mes oreilles ne sont pas prêtes. Écris-moi ta question !", "My ears are not ready. Type your question!");
@@ -295,13 +302,44 @@ namespace GardenWise
             // Gaston stops talking to listen, and does not record his own voice
             StopSpeaking();
             recording = Microphone.Start(Device, false, maxListenSeconds, 16000);
-            State = VoiceState.Listening;
 
-            // a microphone the system refuses does not record at all: say it now, the Console is the only clue
-            if (!Microphone.IsRecording(Device))
-                Debug.LogWarning("[Gaston] Voice: the microphone \"" + (Device ?? "default") + "\" did not start. On macOS, check " +
-                                 "System Settings > Privacy & Security > Microphone for Unity (and Unity Hub when the editor is opened from it).");
-            else Debug.Log("[Gaston] Voice: listening with " + (Device ?? "the default microphone"));
+            // a microphone the system refuses does not record at all: Gaston says it instead of listening to nothing
+            if (recording == null || !Microphone.IsRecording(Device))
+            {
+                Debug.LogWarning("[Gaston] Voice: the microphone \"" + (Device ?? "default") + "\" did not start (" +
+                                 string.Join(", ", Microphone.devices) + "). " + PermissionHint);
+                if (recording != null) Destroy(recording);
+                recording = null;
+                LastProblem = Say("Mon micro ne démarre pas. Vérifie qu'il est autorisé, ou écris-moi ta question !",
+                    "My microphone won't start. Check that it is allowed, or type your question!");
+                return;
+            }
+
+            State = VoiceState.Listening;
+            Debug.Log("[Gaston] Voice: listening with " + (Device ?? "the default microphone"));
+        }
+
+        // macOS gives the microphone permission of the app that opened Unity: Unity Hub never asks for it, so the editor
+        // opened from the Hub records only silence even when Unity itself is allowed
+        private static bool OpenedFromUnityHub
+        {
+            get
+            {
+                return Application.platform == RuntimePlatform.OSXEditor &&
+                       Array.Exists(Environment.GetCommandLineArgs(), arg => string.Equals(arg, "-useHub", StringComparison.OrdinalIgnoreCase));
+            }
+        }
+
+        private static string PermissionHint
+        {
+            get
+            {
+                if (OpenedFromUnityHub)
+                    return "Unity was opened from Unity Hub, which has no microphone permission on macOS: quit Unity and open it on its own " +
+                           "(open -a <Unity.app> --args -projectPath <project>).";
+                return "Check that it is allowed (Windows: Settings > Privacy > Microphone, and the default input in the sound settings; " +
+                       "macOS: System Settings > Privacy & Security > Microphone for Unity).";
+            }
         }
 
         public void StopListening()
@@ -358,12 +396,14 @@ namespace GardenWise
             // exactly zero everywhere: the microphone sent nothing at all (blocked by the system, or a device that is not on)
             if (samples.Length > 0 && loudest == 0f)
             {
-                Debug.LogWarning("[Gaston] Voice: the microphone \"" + (Device ?? "default") + "\" sent only silence. Check that it is the " +
-                                 "right one (default microphone in the sound settings, or the Microphone field of GardenerVoice: " +
-                                 string.Join(", ", Microphone.devices) + ") and that it is allowed (Windows: Settings > Privacy > Microphone; " +
-                                 "macOS: allow Unity, and open Unity without Unity Hub or allow Unity Hub too).");
-                LastProblem = Say("Mon micro ne reçoit aucun son. Vérifie qu'il est autorisé, ou écris-moi ta question !",
-                    "My microphone gets no sound. Check that it is allowed, or type your question!");
+                Debug.LogWarning("[Gaston] Voice: the microphone \"" + (Device ?? "default") + "\" sent only silence. It may be the wrong one " +
+                                 "(default input in the sound settings, or the Microphone field of GardenerVoice: " +
+                                 string.Join(", ", Microphone.devices) + "). " + PermissionHint);
+                LastProblem = OpenedFromUnityHub
+                    ? Say("Mon micro ne reçoit aucun son : Unity a été ouvert par Unity Hub, qui n'a pas accès au micro sur Mac. Ouvre Unity sans le Hub !",
+                        "My microphone gets no sound: Unity was opened from Unity Hub, which has no microphone access on a Mac. Open Unity without the Hub!")
+                    : Say("Mon micro ne reçoit aucun son. Vérifie qu'il est autorisé, ou écris-moi ta question !",
+                        "My microphone gets no sound. Check that it is allowed, or type your question!");
                 return;
             }
 
