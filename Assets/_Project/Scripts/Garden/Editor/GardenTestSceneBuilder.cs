@@ -99,6 +99,7 @@ namespace GardenWise
             SetReference(game, "testLevel", level);
             SetBool(game, "startTestLevelOnPlay", true);
 
+            EnvironmentArt.FinishScene();
             EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene(), ScenePath);
             AssetDatabase.SaveAssets();
             Debug.Log("Test_Garden scene built: " + ScenePath);
@@ -198,6 +199,7 @@ namespace GardenWise
                 barrel.transform.position = new Vector3(-3f, 0f, 4f);
                 RainBarrel gauge = barrel.GetComponent<RainBarrel>();
                 if (gauge != null) SetReference(gauge, "water", water);
+                EnvironmentArt.DressBarrel(barrel);
             }
 
             GameObject rain = InstantiatePrefab(RainPrefabPath);
@@ -232,7 +234,7 @@ namespace GardenWise
             Material soil = EnvironmentArt.SoilMaterial();
             Material wood = EnvironmentArt.WoodMaterial();
             Material highlight = EnvironmentArt.HighlightMaterial();
-            Material mulch = EnvironmentArt.Plain("Mat_Env_Mulch", new Color(0.86f, 0.72f, 0.42f), 0f);
+            Material mulch = EnvironmentArt.MulchMaterial();
             float step = TileSize + TileGap;
 
             for (int row = 0; row < 3; row++)
@@ -351,6 +353,9 @@ namespace GardenWise
             ToolBelt toolBelt = root.AddComponent<ToolBelt>();
             Interactor interactor = root.AddComponent<Interactor>();
             DesktopInput input = root.AddComponent<DesktopInput>();
+            InteractionEffects effects = root.AddComponent<InteractionEffects>();
+            SetReference(effects, "interactor", interactor);
+            SetReference(effects, "particleMaterial", EnvironmentArt.ParticleMaterial());
 
             SetReference(controller, "cameraPivot", pivot.transform);
             SetObjectArray(toolBelt, "fallbackSeeds", seeds);
@@ -446,7 +451,7 @@ namespace GardenWise
             Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (material == null)
             {
-                material = new Material(Shader.Find("Standard"));
+                material = new Material(EnvironmentArt.LitShader());
                 AssetDatabase.CreateAsset(material, path);
             }
             material.color = color;

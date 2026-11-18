@@ -35,3 +35,10 @@ crashlytics-build.properties
 # AI key: never on GitHub
 /Assets/StreamingAssets/ai_config.json
 /Assets/StreamingAssets/ai_config.json.meta
+
+# LLMUnity (Gaston) downloads its native libraries here when Unity opens the project (about 4 GB): never commit them
+/Assets/StreamingAssets/LlamaLib-*/
+/Assets/StreamingAssets/LlamaLib-*.meta
+# local AI models
+*.gguf
+*.gguf.meta
