@@ -1,6 +1,5 @@
 {
-  "apiUrl": "https://api.groq.com/openai/v1/chat/completions",
+  "apiUrl": "PASTE_THE_API_URL_HERE",
   "apiKey": "PASTE_YOUR_KEY_HERE",
-  "model": "openai/gpt-oss-120b",
-  "reasoningEffort": "low"
+  "model": "PASTE_THE_MODEL_NAME_HERE"
 }

@@ -12,7 +12,6 @@ Menu **GardenWise > Build Main Scene** builds `Assets/_Project/Scenes/Main.unity
 | `Garden_3x3`, `DayBell`, `Player` | 3 | the ToolBelt shows the tool in the HUD, the Interactor waters through the WaterManager |
 | `InteractionFeedback` | 3 | inside the HUD panel: crosshair, tile aimed at, result of the last action |
 | `UI_Canvas` (menus, HUD, results, score) | 6 | MenuManager levels = `Level_FirstSprouts`, `Level_SummerDuo`; HUD barrel = WaterManager |
-| `Gaston_Dialogue` | 5 | under `UI_Canvas` (not in the HUD panel, so his models keep loading), top left under the HUD bar; reads the garden, water and weather. Only shows while playing, says the intro of each level |
 | `EventSystem` | - | needed by the menu buttons |
 
 ## Flow to check in Play mode
@@ -23,9 +22,4 @@ Main menu → Play → Level 1 → intro → Start → plant / water / bell for 
 
 - **Plants (owner 2):** the tiles still use `Plant_Placeholder`. Put the real plant prefab in the `plantPrefab` field of the tiles in `Garden_3x3`.
 - **Levels:** `allowedCrops` is empty in `Level_FirstSprouts` and `Level_SummerDuo`, so the seed bag uses the test radish and lettuce of the Player prefab. Add the real CropData assets to the levels.
-
-## Look and controls
-
-- The menus, the HUD and the weather panels use Gaston's pixel-art style: menu **GardenWise > Apply pixel style to the UI** (`Scripts/UI/Editor/PixelStyle.cs`) restyles `UI_Canvas` and `WeatherBoard` again after a change to them.
-- Gaston on desktop: **T** to type a question (Enter sends, Esc stops, the player stands still meanwhile), **V** held down to talk. The header opens and folds the panel.
-- Gaston answers with an online model when `Assets/StreamingAssets/ai_config.json` is filled in (see the README), else with the local model, else with written tips.
+- **Gaston (owner 5):** no NPC or chat prefab on `main` yet. Add it here when `feature/gardener` is merged.
