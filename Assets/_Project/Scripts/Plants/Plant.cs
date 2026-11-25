@@ -9,6 +9,9 @@ namespace GardenWise
         public GrowthStage Stage { get; private set; } = GrowthStage.Seed;
         public int Health { get; private set; }
 
+        // true once the plant has been harvested: it can't be harvested (or grow) again
+        public bool IsHarvested { get; private set; }
+
         private int daysGrown;
 
         public bool IsReady
@@ -27,12 +30,13 @@ namespace GardenWise
             Health = crop.maxHealth;
             daysGrown = 0;
             Stage = GrowthStage.Seed;
+            IsHarvested = false;
         }
 
         // called by the GameManager once per night
         public void GrowOneDay(float moisture)
         {
-            if (Data == null || IsDead || IsReady) return;
+            if (Data == null || IsDead || IsReady || IsHarvested) return;
 
             bool goodWater = moisture >= Data.idealMoistureMin && moisture <= Data.idealMoistureMax;
             if (goodWater)
@@ -54,10 +58,13 @@ namespace GardenWise
         }
 
         // returns the quality between 0 and 1
+        // FIX double harvest: before, IsReady stayed true after a harvest, so a second call
+        // raised the event again and the harvest was counted twice.
         public float Harvest()
         {
-            if (!IsReady) return 0f;
+            if (!IsReady || IsHarvested) return 0f;
 
+            IsHarvested = true;
             float quality = (float)Health / Data.maxHealth;
             GameEvents.RaisePlantHarvested(this, quality);
             return quality;
