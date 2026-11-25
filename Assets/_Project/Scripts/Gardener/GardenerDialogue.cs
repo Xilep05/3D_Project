@@ -178,14 +178,26 @@ namespace GardenWise
             }
         }
 
+        // ai_config.json is filled in on this computer (the service may still be unreachable or paused)
+        public bool OnlineConfigured
+        {
+            get { return useOnlineModel && (online != null || TestOnline != null); }
+        }
+
         public bool LocalModelReady
         {
             get
             {
                 if (!useLocalModel) return false;
                 if (TestModel != null) return true;
-                return modelFound && warmedUp && llm != null && llm.started && !llm.failed && agent != null && agent.llmAgent != null;
+                return RealModelReady;
             }
+        }
+
+        // the real model, whatever the self-check plays
+        private bool RealModelReady
+        {
+            get { return modelFound && warmedUp && llm != null && llm.started && !llm.failed && agent != null && agent.llmAgent != null; }
         }
 
         private bool modelFound;
@@ -333,7 +345,7 @@ namespace GardenWise
             {
                 WarmUp();
             }
-            else if (LocalModelReady)
+            else if (RealModelReady)
             {
                 readyLogged = true;
                 ModelStatus = modelFile + " loaded in " + Time.realtimeSinceStartup.ToString("0.0") + " s (" + llm.architecture + ")";

@@ -174,26 +174,34 @@ namespace GardenWise
             GardenerPanel panel = Object.FindAnyObjectByType<GardenerPanel>();
             GardenerVoice voice = Object.FindAnyObjectByType<GardenerVoice>();
             GardenContextBuilder garden = Object.FindAnyObjectByType<GardenContextBuilder>();
-            TMP_InputField input = Object.FindAnyObjectByType<TMP_InputField>();
+            // the field sits in the bubble, hidden while it is closed: taken from the panel
+            TMP_InputField input = panel != null ? Field<TMP_InputField>(panel, "inputField") : null;
 
             Check(dialogue != null && panel != null && voice != null && garden != null && input != null,
                 "the scene has Gaston's dialogue, panel, voice, garden context and an input field");
             if (failures.Count > 0) return;
 
             RectTransform root = (RectTransform)panel.transform;
-            RectTransform body = Field<RectTransform>(panel, "body");
+            CanvasGroup bubbleGroup = Field<CanvasGroup>(panel, "bubbleGroup");
+            GameObject openHint = Field<GameObject>(panel, "openHint");
+            GameObject voiceGroup = Field<GameObject>(panel, "voiceGroup");
             TMP_Text reply = Field<TMP_Text>(panel, "replyText");
-            TMP_Text question = Field<TMP_Text>(panel, "questionText");
-            TMP_Text tagText = Field<TMP_Text>(panel, "tagText");
-            TMP_Text counter = Field<TMP_Text>(panel, "counterText");
-            Image tagBackground = Field<Image>(panel, "tagBackground");
-            Graphic arrow = Field<Graphic>(panel, "moreArrow");
+            LayoutElement viewport = Field<LayoutElement>(panel, "replyViewport");
             GameObject waiting = Field<GameObject>(panel, "waitingGroup");
-            Image bubble = body.Find("Bubble").GetComponent<Image>();
+            GameObject alert = Field<GameObject>(panel, "alertGroup");
+            TMP_Text alertText = Field<TMP_Text>(panel, "alertText");
+            TMP_Text typeKey = Field<TMP_Text>(panel, "typeKeyText");
+            TMP_Text closeKey = Field<TMP_Text>(panel, "closeKeyText");
 
-            Check(body != null && reply != null && question != null && tagText != null && counter != null && tagBackground != null && arrow != null && waiting != null,
-                "the panel has its body, reply, question, tag, counter, arrow and waiting group");
+            Check(bubbleGroup != null && openHint != null && voiceGroup != null && reply != null && viewport != null && waiting != null &&
+                  alert != null && alertText != null && typeKey != null && closeKey != null,
+                "the panel has its bubble, keys, microphone, reply, thinking icons and alert");
             if (failures.Count > 0) return;
+
+            RectTransform bubble = (RectTransform)bubbleGroup.transform.Find("Bubble");
+            Image frame = bubble.GetComponent<Image>();
+            Image fill = bubble.Find("Fill").GetComponent<Image>();
+            Transform portrait = root.Find("Portrait");
 
             int eventsHeard = 0;
             string lastQuestionHeard = null;
@@ -204,23 +212,33 @@ namespace GardenWise
             string lastReply = "";
             dialogue.ReplyFinished += (text, source) => { lastReply = text; lastSource = source; };
 
-            // 1. the panel: top right, one third of the screen, in the colours of the game's UI, folds and unfolds
-            Check(root.anchorMin == Vector2.one && root.anchorMax == Vector2.one && root.pivot == Vector2.one, "the panel is anchored to the top right corner");
-            Check(root.rect.width > 1920f * 0.3f && root.rect.width < 1920f * 0.36f, "the panel is about one third of the screen wide");
-            Check(bubble.type == Image.Type.Sliced && bubble.sprite != null && bubble.sprite.name == "UISprite", "the bubble is a rounded panel, like the game's panels");
-            Check(ColorUtility.ToHtmlStringRGB(bubble.color) == "1C3D2B", "the bubble has the dark green of the game's panels");
-            Check(reply.font != null && reply.font == TMP_Settings.defaultFontAsset && reply.color == Color.white, "the reply uses the game's font, in white");
-            Check(panel.IsOpen && body.gameObject.activeSelf, "the panel starts unfolded");
-            Check(!waiting.activeSelf && !tagBackground.gameObject.activeSelf && !arrow.gameObject.activeSelf, "before any question: no loading icons, no tag, no arrow");
-            Check(reply.GetParsedText().Contains("Pose-moi une question"), "before any question: Gaston invites the player to ask");
+            // 1. as in the Figma mock-up, in the game's green: round portrait top left, cream frames, Inter
+            Check(root.anchorMin == new Vector2(0f, 1f) && root.anchorMax == new Vector2(0f, 1f), "Gaston is anchored to the top left corner");
+            Check(portrait != null && portrait.GetComponent<Mask>() != null && portrait.GetComponentsInChildren<Image>(true).Any(image => image.sprite != null && image.sprite.name == "gaston_portrait"),
+                "his portrait is drawn in a circle");
+            Check(ColorUtility.ToHtmlStringRGB(fill.color) == "1C3D2B" && ColorUtility.ToHtmlStringRGB(frame.color) == "E3E0BF",
+                "the bubble has the dark green of the game's panels and a cream frame");
+            Check(reply.font != null && reply.font.name.StartsWith("Inter-Regular") && ColorUtility.ToHtmlStringRGB(reply.color) == "F5F5E8", "the reply is written in Inter");
+            Check(!panel.IsOpen && !bubbleGroup.gameObject.activeSelf && openHint.activeSelf && typeKey.text == "T" && !voiceGroup.activeSelf,
+                "closed: only the portrait and the T key, no microphone");
+            Capture("GardenerSelfCheck_closed.png");
 
-            panel.Toggle();
-            await WaitUntil(() => !body.gameObject.activeSelf, 3f);
-            Check(!panel.IsOpen && !body.gameObject.activeSelf, "the header button folds the panel");
-            Capture("GardenerSelfCheck_folded.png");
-            panel.Toggle();
-            await WaitUntil(() => body.gameObject.activeSelf && Mathf.Approximately(body.sizeDelta.y, 428f), 3f);
-            Check(panel.IsOpen && Mathf.Approximately(body.sizeDelta.y, 428f), "and unfolds it again to its full height");
+            panel.Open();
+            await WaitUntil(() => bubbleGroup.alpha >= 1f, 3f);
+            Check(panel.IsOpen && bubbleGroup.alpha >= 1f && !openHint.activeSelf && voiceGroup.activeSelf && closeKey.text == "Échap",
+                "open: the bubble, the microphone with its V key, and Esc to close");
+            Check(!waiting.activeSelf && !alert.activeSelf && reply.GetParsedText().Contains("Pose-moi une question"), "before any question: Gaston invites the player to ask");
+            Capture("GardenerSelfCheck_open.png");
+
+            // the smallest bubble: one line of text
+            dialogue.Say("Salut !");
+            panel.SkipTypewriter();
+            await Task.Delay(100);
+            Canvas.ForceUpdateCanvases();
+            float oneLine = bubble.rect.height;
+            Check(panel.ShownLines == 1 && viewport.preferredHeight > 30f && viewport.preferredHeight < 50f && Mathf.Approximately(bubble.rect.width, 656f),
+                "a one-line reply gives the smallest bubble (" + viewport.preferredHeight + " px of text, bubble " + oneLine + " px)");
+            Capture("GardenerSelfCheck_oneline.png");
 
             // 2. the garden context comes from the test garden
             string context = garden.Describe();
@@ -237,18 +255,15 @@ namespace GardenWise
             input.onSubmit.Invoke(input.text);
 
             Check(eventsHeard == 1 && lastQuestionHeard == firstQuestion, "GameEvents.GardenerAsked goes out once, with the question");
-            Check(dialogue.QuestionCount == 1 && counter.text.Contains("1"), "the counter shows 1 question");
-            Check(question.text.Contains(firstQuestion), "the bubble shows the question that was understood");
             Check(input.text == "", "the input field is emptied after sending");
-            Check(reply.maxVisibleCharacters == 0 && !arrow.gameObject.activeSelf, "the reply starts hidden and is written letter by letter");
+            Check(reply.maxVisibleCharacters == 0 && panel.ShownLines == 1, "the reply starts hidden and is written letter by letter, from one line");
 
             panel.SkipTypewriter();
             string firstReply = reply.GetParsedText();
-            Check(firstReply.StartsWith("Arrose le matin"), "the whole offline tip is shown once written");
-            Check(tagBackground.gameObject.activeSelf && tagText.text.Contains("Hors ligne") && lastSource == GardenerReplySource.OfflineTip, "the reply is tagged as an offline tip");
-            Check(!tagText.text.Contains("IA"), "an offline tip is never tagged as the local AI");
-            Check(arrow.gameObject.activeSelf && !waiting.activeSelf && !dialogue.IsAnswering, "arrow shown, no loading icons, dialogue free again");
-            arrow.enabled = true;
+            Check(firstReply.StartsWith("Arrose le matin") && lastSource == GardenerReplySource.OfflineTip, "the whole offline tip is shown once written");
+            Check(alert.activeSelf && alertText.text.Contains("non configurée") && alertText.text.Contains("préécrites"),
+                "a pre-written tip comes with the alert: online AI not set up");
+            Check(!waiting.activeSelf && !dialogue.IsAnswering, "no loading icons, dialogue free again");
             Capture("GardenerSelfCheck_offline.png");
 
             input.onSubmit.Invoke("   ");
@@ -256,8 +271,8 @@ namespace GardenWise
 
             for (int i = 0; i < 12; i++) dialogue.Ask("Question " + i);
             panel.SkipTypewriter();
-            Check(eventsHeard == 13 && dialogue.QuestionCount == 13, "13 questions in a row are all counted, there is no limit");
-            Check(reply.GetParsedText() != firstReply && tagText.text.Contains("Hors ligne"), "the tips rotate and stay tagged as offline tips");
+            Check(eventsHeard == 13 && dialogue.QuestionCount == 13, "13 questions in a row are all sent, there is no limit");
+            Check(reply.GetParsedText() != firstReply && alert.activeSelf, "the tips rotate and keep the alert");
 
             // 4. a model played by the test: thinking, streaming, colours, safety
             Action<string> pushPartial = null;
@@ -268,22 +283,23 @@ namespace GardenWise
 
             dialogue.Ask(firstQuestion);
             Check(messageSeen != null && messageSeen.Contains("Laitue") && messageSeen.EndsWith(firstQuestion), "the model gets the garden context, then the question");
-            Check(waiting.activeSelf && !reply.gameObject.activeSelf && !tagBackground.gameObject.activeSelf && dialogue.IsAnswering, "while the AI thinks: loading icons, no reply, no tag");
+            Check(waiting.activeSelf && !viewport.gameObject.activeSelf && !alert.activeSelf && dialogue.IsAnswering, "while the AI thinks: hopping icons, no reply, no alert");
 
             Image[] slots = waiting.GetComponentsInChildren<Image>();
-            Check(slots.Length == 3 && slots.All(slot => slot.enabled && slot.sprite != null) && slots.Select(slot => slot.sprite).Distinct().Count() == 3, "three different fruits and vegetables hop while Gaston thinks");
+            Check(slots.Length == 4 && slots.All(slot => slot.enabled && slot.sprite != null) && slots.Select(slot => slot.sprite).Distinct().Count() == 4,
+                "four different fruits and vegetables hop while Gaston thinks");
             Capture("GardenerSelfCheck_thinking.png");
 
             pushPartial("Ta [vert]lai");
-            Check(!waiting.activeSelf && reply.gameObject.activeSelf && tagText.text.Contains("IA locale"), "the first words replace the loading icons, tagged local AI");
-            Check(reply.text.Contains("<color=#9BE07A>") && !reply.text.Contains("[vert]"), "a keyword is coloured (light green on the dark panel) as soon as it starts");
+            Check(!waiting.activeSelf && viewport.gameObject.activeSelf && !alert.activeSelf, "the first words replace the icons, no alert for an AI");
+            Check(reply.text.Contains("<color=#9BE07A>") && !reply.text.Contains("[vert]"), "a keyword is coloured (light green) as soon as it starts");
             pushPartial("Ta [vert]laitue[/vert] a soif. [o");
             Check(!reply.text.Contains("[o"), "half a marker is never shown");
 
             complete("Ta [vert]laitue[/vert] a soif. <b>Arrose</b>-la [or]ce soir[/or] !");
             panel.SkipTypewriter();
             Check(reply.GetParsedText() == "Ta laitue a soif. <b>Arrose</b>-la ce soir !", "final reply: markers become colours, HTML stays visible as plain text");
-            Check(tagText.text.Contains("IA locale") && arrow.gameObject.activeSelf, "final reply: tagged local AI, arrow shown");
+            Check(!alert.activeSelf, "a reply of the AI has no alert");
 
             dialogue.Ask("Première question");
             Action<string> lateAnswer = complete;
@@ -297,16 +313,31 @@ namespace GardenWise
             dialogue.Ask("Question pendant une panne");
             complete("");
             panel.SkipTypewriter();
-            Check(tagText.text.Contains("Hors ligne") && reply.GetParsedText().Length > 0, "an empty AI answer falls back to a tagged offline tip");
+            Check(alert.activeSelf && reply.GetParsedText().Length > 0, "an empty AI answer falls back to a tip, with the alert");
 
+            // the bubble grows line by line while the text is written, up to five lines
+            const string longReply = "Ta [vert]laitue[/vert] manque d'eau : sa terre est à [or]22[/or] alors qu'elle aime entre 50 et 80. " +
+                                     "Arrose-la doucement [vert]ce soir[/vert] avec l'eau du récupérateur, pas en plein soleil.";
             dialogue.Ask("Une longue question");
-            complete("Ta [vert]laitue[/vert] manque d'eau : sa terre est à [or]22[/or] alors qu'elle aime entre 50 et 80. " +
-                     "Arrose-la doucement [vert]ce soir[/vert] avec l'eau du récupérateur, pas en plein soleil. " +
-                     "Demain c'est la [or]canicule[/or], alors pense aussi au paillage pour garder la terre fraîche !");
+            complete(longReply);
+            await Task.Delay(400);
+            Canvas.ForceUpdateCanvases();
+            int linesWhileWriting = panel.ShownLines;
             panel.SkipTypewriter();
-            Check(!reply.isTextOverflowing && reply.fontSize >= 20f, "a long three-sentence reply fits in the bubble");
-            arrow.enabled = true;
+            await Task.Delay(100);
+            Canvas.ForceUpdateCanvases();
+            int lines = panel.ShownLines;
+            Check(linesWhileWriting < lines && lines >= 3 && lines <= 5 && bubble.rect.height > oneLine + (lines - 1) * 36f,
+                "the bubble grows with the lines written (" + linesWhileWriting + " then " + lines + " lines)");
             Capture("GardenerSelfCheck_long.png");
+
+            dialogue.Ask("Une très longue question");
+            complete(longReply + " " + longReply + " Demain c'est la [or]canicule[/or], pense au paillage !");
+            panel.SkipTypewriter();
+            await Task.Delay(100);
+            Canvas.ForceUpdateCanvases();
+            Check(panel.ShownLines > 5 && viewport.preferredHeight < 5.5f * 46f && reply.rectTransform.anchoredPosition.y > 0f,
+                "beyond five lines the bubble stops growing and shows the last lines (" + panel.ShownLines + " lines)");
 
             // 5. an online model played by the test: first choice, and the local model takes over when it fails
             string onlineMessage = null;
@@ -320,8 +351,8 @@ namespace GardenWise
                 "with an online model set up, it gets the question first (the local model waits)");
             onlineDone("Ta [vert]laitue[/vert] a soif, arrose-la [or]ce soir[/or] !");
             panel.SkipTypewriter();
-            Check(lastSource == GardenerReplySource.OnlineModel && tagText.text.Contains("IA en ligne") && reply.GetParsedText() == "Ta laitue a soif, arrose-la ce soir !",
-                "the online reply is shown with its colours, tagged online AI");
+            Check(lastSource == GardenerReplySource.OnlineModel && !alert.activeSelf && reply.GetParsedText() == "Ta laitue a soif, arrose-la ce soir !",
+                "the online reply is shown with its colours, no alert");
 
             dialogue.Ask("Question sans internet");
             onlineDone(null);
@@ -329,13 +360,20 @@ namespace GardenWise
                 "when the online model fails, the same question goes to the local model");
             complete("Réponse du modèle local");
             panel.SkipTypewriter();
-            Check(lastSource == GardenerReplySource.LocalModel && tagText.text.Contains("IA locale"), "and that reply is tagged local AI");
+            Check(lastSource == GardenerReplySource.LocalModel && !alert.activeSelf, "and that reply has no alert either");
 
             dialogue.UseLocalModel = false;
             dialogue.Ask("Question sans rien");
             onlineDone("");
             panel.SkipTypewriter();
-            Check(lastSource == GardenerReplySource.OfflineTip && tagText.text.Contains("Hors ligne"), "with no model at all, an offline tip answers");
+            Check(lastSource == GardenerReplySource.OfflineTip && alert.activeSelf && alertText.text.Contains("indisponible"),
+                "with no model answering, a tip with the alert: online AI unavailable");
+
+            panel.Close();
+            await WaitUntil(() => !bubbleGroup.gameObject.activeSelf, 3f);
+            Check(!panel.IsOpen && !bubbleGroup.gameObject.activeSelf && openHint.activeSelf && !voiceGroup.activeSelf, "Esc closes the bubble: back to the portrait and T");
+            panel.Open();
+            await WaitUntil(() => bubbleGroup.alpha >= 1f, 3f);
 
             dialogue.UseLocalModel = true;
             dialogue.TestOnline = null;
@@ -604,6 +642,7 @@ namespace GardenWise
         {
             TMP_Text reply = Field<TMP_Text>(panel, "replyText");
             Image micIcon = Field<Image>(panel, "micIcon");
+            panel.Open();
             panel.ToggleMicrophone();
             await Task.Delay(200);
 

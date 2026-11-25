@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Linq;
 using LLMUnity;
 using TMPro;
@@ -27,7 +28,13 @@ namespace GardenWise
         // the colours of the game's UI (UI_Canvas, owner 6): Gaston looks like the rest of the game
         private static readonly Color32 PanelGreen = new Color32(0x1C, 0x3D, 0x2B, 0xEB);
         private static readonly Color32 ButtonGreen = new Color32(0x40, 0x85, 0x47, 0xFF);
-        private static readonly Color32 MutedText = new Color32(0xC9, 0xDC, 0xCB, 0xFF);
+        private static readonly Color32 BodyText = new Color32(0xF5, 0xF5, 0xE8, 0xFF);
+
+        // Inter (Figma mock-up), made into TextMesh Pro fonts by PrepareFonts
+        private const string FontFolder = ArtFolder + "/Fonts";
+        private static TMP_FontAsset Regular;
+        private static TMP_FontAsset SemiBold;
+        private static Material KeyShadow;
 
         // only the backdrop of the test scene
         private static readonly Color32 Sky = new Color32(0xBF, 0xE3, 0xF2, 0xFF);
@@ -76,17 +83,17 @@ namespace GardenWise
         private static void PrepareAssets()
         {
             ConfigureVoiceLibrary();
+            PrepareFonts();
         }
 
         // ------------------------------------------------------------------ prefab
 
         // one self-contained object: drop it under a canvas and Gaston works (dialogue, local model, voice, panel)
-        // sizes are in canvas units for a 1920 x 1080 canvas: the panel is one third of the screen wide
+        // sizes are in canvas units for a 1920 x 1080 canvas: twice the sizes of the Figma mock-up
         private static void BuildPrefab()
         {
-            RectTransform root = AddRect("Gaston_Dialogue", null, 0f, 0f, 636f, 508f);
-            root.anchorMin = root.anchorMax = root.pivot = Vector2.one;
-            root.anchoredPosition = new Vector2(-24f, -24f);
+            RectTransform root = AddRect("Gaston_Dialogue", null, 0f, 0f, 824f, 560f);
+            root.anchoredPosition = new Vector2(24f, -24f);
 
             GardenContextBuilder context = root.gameObject.AddComponent<GardenContextBuilder>();
             GardenerDialogue dialogue = root.gameObject.AddComponent<GardenerDialogue>();
@@ -117,94 +124,137 @@ namespace GardenWise
             SetReference(voice, "speaker", speaker);
             SetReference(voice, "voiceSample", AssetDatabase.LoadAssetAtPath<AudioClip>(ArtFolder + "/Voices/cml_1770.wav"));
 
-            // --- header: always visible, folds and unfolds the rest
-            RectTransform header = AddRect("Header", root, 0f, 0f, 636f, 72f);
-            AddFrame(header, ButtonGreen);
-            AddText(AddRect("NameText", header, 24f, 0f, 260f, 72f), "Gaston", 34f, Color.white, TextAlignmentOptions.MidlineLeft);
-            TextMeshProUGUI counter = AddText(AddRect("CounterText", header, 300f, 0f, 192f, 72f), "Questions : 0", 22f, Color.white, TextAlignmentOptions.MidlineRight);
+            // --- left column: the round portrait, and under it the keys
+            RectTransform portrait = AddRect("Portrait", root, 0f, 0f, 128f, 128f);
+            Image disc = AddSprite(portrait, UiFolder + "/disc.png");
+            portrait.gameObject.AddComponent<Mask>().showMaskGraphic = false;
+            Stretch(AddSprite(AddRect("Picture", portrait, 0f, 0f, 0f, 0f), UiFolder + "/gaston_portrait.png").rectTransform);
+            Image portraitRing = AddSprite(AddRect("Ring", root, 0f, 0f, 128f, 128f), UiFolder + "/ring.png");
+            portraitRing.color = GardenerPanel.Cream;
+            disc.color = Color.white;
 
-            Image micIcon = AddSprite(AddRect("MicButton", header, 510f, 14f, 44f, 44f), UiFolder + "/icon_mic.png");
-            Button micButton = AddButton(micIcon, Color.white);
-            Image foldIcon = AddSprite(AddRect("FoldButton", header, 570f, 14f, 44f, 44f), UiFolder + "/icon_chevron.png");
-            foldIcon.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-            foldIcon.rectTransform.anchoredPosition = new Vector2(594f, -36f);
-            Button foldButton = AddButton(foldIcon, Color.white);
+            RectTransform openHint = AddRect("OpenHint", root, 0f, 144f, 128f, 44f);
+            TMP_Text typeKeyText = AddKey(openHint, "TypeKey", "T").text;
+            Centre(typeKeyText.transform.parent as RectTransform);
 
-            // --- body: clipped by a mask so it can unroll
-            RectTransform body = AddRect("Body", root, 0f, 80f, 636f, 428f);
-            body.gameObject.AddComponent<RectMask2D>();
+            RectTransform voiceGroup = AddRect("Voice", root, 0f, 144f, 128f, 120f);
+            RectTransform mic = AddRect("MicButton", voiceGroup, 34f, 0f, 60f, 60f);
+            Image micFill = AddSprite(mic, UiFolder + "/disc.png");
+            micFill.color = PanelGreen;
+            Image micRing = AddSprite(AddRect("Ring", mic, 0f, 0f, 60f, 60f), UiFolder + "/ring.png");
+            micRing.color = GardenerPanel.Cream;
+            Image micIcon = AddSprite(AddRect("Icon", mic, 15f, 15f, 30f, 30f), UiFolder + "/icon_mic.png");
+            micIcon.color = GardenerPanel.Cream;
+            Button micButton = AddButton(micFill, PanelGreen);
+            RectTransform talkHolder = AddRect("TalkKeyHolder", voiceGroup, 0f, 76f, 128f, 44f);
+            (Image talkKeyFrame, TMP_Text talkKeyText) = AddKey(talkHolder, "TalkKey", "V");
+            Centre(talkKeyFrame.rectTransform);
 
-            RectTransform bubble = AddRect("Bubble", body, 0f, 0f, 636f, 360f);
-            AddFrame(bubble, PanelGreen);
+            // --- right column: the bubble, then "press Esc to close"; it grows downwards with the text
+            RectTransform column = AddRect("BubbleColumn", root, 168f, 0f, 656f, 0f);
+            CanvasGroup bubbleGroup = column.gameObject.AddComponent<CanvasGroup>();
+            VerticalLayoutGroup columnLayout = AddVertical(column, 0, 16f);
+            columnLayout.childAlignment = TextAnchor.UpperLeft;
+            columnLayout.childForceExpandWidth = false;
+            column.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-            TextMeshProUGUI question = AddText(AddRect("QuestionText", bubble, 30f, 18f, 400f, 30f), "", 20f, MutedText, TextAlignmentOptions.MidlineLeft);
-            question.textWrappingMode = TextWrappingModes.NoWrap;
-            question.overflowMode = TextOverflowModes.Ellipsis;
+            // Figma: 2 px cream frame, 4 px of dark fill, a 1 px line, 12 px inside (all doubled here)
+            RectTransform bubble = AddRect("Bubble", column, 0f, 0f, 656f, 0f);
+            AddFrame(bubble, GardenerPanel.Cream, "round_fill", 1f);
+            LayoutElement bubbleSize = bubble.gameObject.AddComponent<LayoutElement>();
+            bubbleSize.minWidth = bubbleSize.preferredWidth = 656f;
+            AddVertical(bubble, 4, 0f);
+            RectTransform fill = AddRect("Fill", bubble, 0f, 0f, 0f, 0f);
+            AddFrame(fill, PanelGreen, "round_fill", 1.33f);
+            AddVertical(fill, 8, 0f);
+            RectTransform inner = AddRect("Inner", fill, 0f, 0f, 0f, 0f);
+            AddFrame(inner, ButtonGreen, "round_line", 2f);
+            AddVertical(inner, 24, 16f);
 
-            TextMeshProUGUI reply = AddText(AddRect("ReplyText", bubble, 30f, 58f, 576f, 262f), "", 30f, Color.white, TextAlignmentOptions.TopLeft);
-            reply.enableAutoSizing = true;
-            reply.fontSizeMin = 20f;
-            reply.fontSizeMax = 30f;
+            RectTransform alert = AddRect("Alert", inner, 0f, 0f, 0f, 0f);
+            HorizontalLayoutGroup alertLayout = alert.gameObject.AddComponent<HorizontalLayoutGroup>();
+            alertLayout.spacing = 12f;
+            alertLayout.childAlignment = TextAnchor.MiddleLeft;
+            alertLayout.childControlWidth = alertLayout.childControlHeight = true;
+            alertLayout.childForceExpandWidth = alertLayout.childForceExpandHeight = false;
+            Image alertIcon = AddSprite(AddRect("Icon", alert, 0f, 0f, 30f, 30f), UiFolder + "/icon_alert.png");
+            alertIcon.color = GardenerPanel.Gold;
+            Fixed(alertIcon.gameObject, 30f, 30f);
+            TextMeshProUGUI alertText = AddText(AddRect("AlertText", alert, 0f, 0f, 0f, 0f), "IA distante non configurée : réponses préécrites", 24f, GardenerPanel.Gold, TextAlignmentOptions.MidlineLeft, SemiBold);
+            alertText.textWrappingMode = TextWrappingModes.Normal;
 
-            Image arrow = AddSprite(AddRect("MoreArrow", bubble, 582f, 312f, 24f, 24f), UiFolder + "/icon_chevron.png");
-            arrow.color = MutedText;
-            arrow.gameObject.SetActive(false);
+            AddText(AddRect("NameText", inner, 0f, 0f, 0f, 0f), "Gaston", 26f, GardenerPanel.Cream, TextAlignmentOptions.TopLeft, SemiBold);
 
-            // tag "IA locale" / "Hors ligne", sized by its text
-            RectTransform tag = AddRect("Tag", bubble, 0f, 0f, 0f, 0f);
-            tag.anchorMin = tag.anchorMax = tag.pivot = Vector2.one;
-            tag.anchoredPosition = new Vector2(-24f, -16f);
-            Image tagBackground = AddFrame(tag, Color.white);
+            // the reply is clipped by its viewport: as high as the lines written so far (GardenerPanel)
+            RectTransform viewport = AddRect("ReplyViewport", inner, 0f, 0f, 0f, 44f);
+            viewport.gameObject.AddComponent<RectMask2D>();
+            LayoutElement viewportSize = viewport.gameObject.AddComponent<LayoutElement>();
+            viewportSize.preferredHeight = 44f;
+            RectTransform replyRect = AddRect("ReplyText", viewport, 0f, 0f, 0f, 1000f);
+            replyRect.anchorMin = new Vector2(0f, 1f);
+            replyRect.anchorMax = new Vector2(1f, 1f);
+            replyRect.pivot = new Vector2(0.5f, 1f);
+            replyRect.sizeDelta = new Vector2(0f, 1000f);
+            replyRect.anchoredPosition = Vector2.zero;
+            TextMeshProUGUI reply = AddText(replyRect, "", 30f, BodyText, TextAlignmentOptions.TopLeft, Regular);
+            reply.lineSpacing = 22f; // 44 px lines, as in the mock-up (15 / 22)
 
-            HorizontalLayoutGroup tagLayout = tag.gameObject.AddComponent<HorizontalLayoutGroup>();
-            tagLayout.padding = new RectOffset(12, 12, 3, 3);
-            tagLayout.childAlignment = TextAnchor.MiddleCenter;
-            tagLayout.childControlWidth = true;
-            tagLayout.childControlHeight = true;
-            tagLayout.childForceExpandWidth = false;
-            tagLayout.childForceExpandHeight = false;
-
-            ContentSizeFitter tagFitter = tag.gameObject.AddComponent<ContentSizeFitter>();
-            tagFitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
-            tagFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-            TextMeshProUGUI tagText = AddText(AddRect("TagText", tag, 0f, 0f, 0f, 0f), "IA locale", 18f, PanelGreen, TextAlignmentOptions.Center);
-            tagText.textWrappingMode = TextWrappingModes.NoWrap;
-            tag.gameObject.SetActive(false);
-
-            // waiting: three hopping fruits and vegetables (ThinkingIcons) and a short text
-            RectTransform waiting = AddRect("Waiting", bubble, 30f, 110f, 576f, 140f);
-            Image[] slots = new Image[3];
+            // thinking: hopping fruits and vegetables (ThinkingIcons)
+            RectTransform waiting = AddRect("Waiting", inner, 0f, 0f, 0f, 0f);
+            Fixed(waiting.gameObject, -1f, 48f);
+            Image[] slots = new Image[4];
             for (int i = 0; i < slots.Length; i++)
             {
-                slots[i] = AddRect("Icon" + (i + 1), waiting, i * 72f, 40f, 60f, 60f).gameObject.AddComponent<Image>();
+                slots[i] = AddRect("Icon" + (i + 1), waiting, i * 56f, 8f, 40f, 40f).gameObject.AddComponent<Image>();
                 slots[i].raycastTarget = false;
             }
 
-            TextMeshProUGUI waitingText = AddText(AddRect("WaitingText", waiting, 228f, 0f, 348f, 140f), "Gaston réfléchit…", 26f, Color.white, TextAlignmentOptions.MidlineLeft);
-            waiting.gameObject.SetActive(false);
+            TMP_InputField input = AddInputField(inner, "QuestionInput", "Écris ta question…");
 
-            TMP_InputField input = AddInputField(body, "QuestionInput", "Pourquoi ma laitue va mal ?");
+            // the tail pointing at Gaston covers the frame where it joins the bubble
+            Image tailFill = AddSprite(AddRect("TailFill", bubble, -28f, 46f, 32f, 36f), UiFolder + "/tail_fill.png");
+            tailFill.color = PanelGreen;
+            Image tailLine = AddSprite(AddRect("TailLine", bubble, -28f, 46f, 32f, 36f), UiFolder + "/tail_line.png");
+            tailLine.color = GardenerPanel.Cream;
+            tailFill.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+            tailLine.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+
+            // "Appuie sur [Échap] pour fermer", on a dark strip so it reads on the sky and on the grass
+            RectTransform closeHint = AddRect("CloseHint", column, 0f, 0f, 0f, 0f);
+            AddFrame(closeHint, new Color(0f, 0f, 0f, 0.45f), "round_fill", 1f);
+            HorizontalLayoutGroup hintLayout = closeHint.gameObject.AddComponent<HorizontalLayoutGroup>();
+            hintLayout.padding = new RectOffset(16, 16, 8, 8);
+            hintLayout.spacing = 10f;
+            hintLayout.childAlignment = TextAnchor.MiddleLeft;
+            hintLayout.childControlWidth = hintLayout.childControlHeight = true;
+            hintLayout.childForceExpandWidth = hintLayout.childForceExpandHeight = false;
+            ContentSizeFitter hintFitter = closeHint.gameObject.AddComponent<ContentSizeFitter>();
+            hintFitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            AddText(AddRect("Before", closeHint, 0f, 0f, 0f, 0f), "Appuie sur", 22f, Color.white, TextAlignmentOptions.MidlineLeft, SemiBold);
+            TMP_Text closeKeyText = AddKey(closeHint, "CloseKey", "Échap").text;
+            AddText(AddRect("After", closeHint, 0f, 0f, 0f, 0f), "pour fermer", 22f, Color.white, TextAlignmentOptions.MidlineLeft, SemiBold);
 
             GardenerPanel panel = root.gameObject.AddComponent<GardenerPanel>();
             SetReference(panel, "dialogue", dialogue);
             SetReference(panel, "voice", voice);
-            SetReference(panel, "body", body);
-            SetReference(panel, "foldArrow", foldIcon.rectTransform);
-            SetReference(panel, "questionText", question);
+            SetReference(panel, "bubbleGroup", bubbleGroup);
+            SetReference(panel, "openHint", openHint.gameObject);
             SetReference(panel, "replyText", reply);
-            SetReference(panel, "moreArrow", arrow);
+            SetReference(panel, "replyViewport", viewportSize);
             SetReference(panel, "waitingGroup", waiting.gameObject);
-            SetReference(panel, "waitingText", waitingText);
             SetReferences(panel, "iconSlots", slots);
             SetReferences(panel, "thinkingIcons", LoadSprites(IconsFolder));
-            SetReference(panel, "tagBackground", tagBackground);
-            SetReference(panel, "tagText", tagText);
+            SetReference(panel, "alertGroup", alert.gameObject);
+            SetReference(panel, "alertText", alertText);
             SetReference(panel, "inputField", input);
+            SetReference(panel, "voiceGroup", voiceGroup.gameObject);
+            SetReference(panel, "micRing", micRing);
             SetReference(panel, "micIcon", micIcon);
-            SetReference(panel, "counterText", counter);
+            SetReference(panel, "talkKeyFrame", talkKeyFrame);
+            SetReference(panel, "typeKeyText", typeKeyText);
+            SetReference(panel, "talkKeyText", talkKeyText);
+            SetReference(panel, "closeKeyText", closeKeyText);
 
-            UnityEventTools.AddVoidPersistentListener(foldButton.onClick, panel.Toggle);
             UnityEventTools.AddVoidPersistentListener(micButton.onClick, panel.ToggleMicrophone);
 
             Directory.CreateDirectory(Path.GetDirectoryName(PrefabPath));
@@ -214,6 +264,65 @@ namespace GardenWise
 
             if (saved) Debug.Log("[Gaston] Prefab saved: " + PrefabPath);
             else Debug.LogError("[Gaston] Could not save " + PrefabPath);
+        }
+
+        // a key drawn as in the mock-up: only its outline, the letter inside, in cream; as wide as its label
+        private static (Image frame, TMP_Text text) AddKey(Transform parent, string name, string label)
+        {
+            RectTransform key = AddRect(name, parent, 0f, 0f, 44f, 44f);
+            Image frame = AddFrame(key, GardenerPanel.Cream, "round_line", 1.33f);
+            HorizontalLayoutGroup layout = key.gameObject.AddComponent<HorizontalLayoutGroup>();
+            layout.padding = new RectOffset(12, 12, 0, 0);
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.childControlWidth = layout.childControlHeight = true;
+            layout.childForceExpandWidth = layout.childForceExpandHeight = false;
+            ContentSizeFitter fitter = key.gameObject.AddComponent<ContentSizeFitter>();
+            fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            LayoutElement size = key.gameObject.AddComponent<LayoutElement>();
+            size.minWidth = 44f;
+            size.minHeight = size.preferredHeight = 44f;
+
+            TextMeshProUGUI text = AddText(AddRect("Label", key, 0f, 0f, 0f, 0f), label, 22f, GardenerPanel.Cream, TextAlignmentOptions.Center, SemiBold);
+            text.textWrappingMode = TextWrappingModes.NoWrap;
+
+            // a soft dark shadow under the outline and the letter: still only an outline, but readable on the sky
+            Shadow shadow = key.gameObject.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.55f);
+            shadow.effectDistance = new Vector2(0f, -2f);
+            if (KeyShadow != null) text.fontSharedMaterial = KeyShadow;
+            return (frame, text);
+        }
+
+        // a key alone under the portrait: centred in its row
+        private static void Centre(RectTransform key)
+        {
+            key.anchorMin = key.anchorMax = key.pivot = new Vector2(0.5f, 1f);
+            key.anchoredPosition = Vector2.zero;
+        }
+
+        private static void Stretch(RectTransform rect)
+        {
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = rect.offsetMax = Vector2.zero;
+        }
+
+        private static VerticalLayoutGroup AddVertical(RectTransform rect, int padding, float spacing)
+        {
+            VerticalLayoutGroup layout = rect.gameObject.AddComponent<VerticalLayoutGroup>();
+            layout.padding = new RectOffset(padding, padding, padding, padding);
+            layout.spacing = spacing;
+            layout.childControlWidth = layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+            return layout;
+        }
+
+        private static void Fixed(GameObject target, float width, float height)
+        {
+            LayoutElement size = target.AddComponent<LayoutElement>();
+            if (width >= 0f) size.minWidth = size.preferredWidth = width;
+            if (height >= 0f) size.minHeight = size.preferredHeight = height;
         }
 
         // ------------------------------------------------------------------ test scene
@@ -350,14 +459,17 @@ namespace GardenWise
             return image;
         }
 
-        // a rounded panel like the buttons and panels of the game (Unity's default UI sprite, 9-slice)
-        private static Image AddFrame(RectTransform rect, Color colour)
+        // a rounded shape from UI/round_fill.png or round_line.png (9-slice, 16 px corners):
+        // a higher multiplier makes the corners and the line thinner (2 = 8 px corners, 2 px line)
+        private static Image AddFrame(RectTransform rect, Color colour, string shape, float multiplier)
         {
             Image image = rect.gameObject.AddComponent<Image>();
-            image.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+            image.sprite = AssetDatabase.LoadAssetAtPath<Sprite>(UiFolder + "/" + shape + ".png");
             image.type = Image.Type.Sliced;
+            image.pixelsPerUnitMultiplier = multiplier;
             image.color = colour;
             image.raycastTarget = false;
+            if (image.sprite == null) Debug.LogError("[Gaston] Sprite not found: " + UiFolder + "/" + shape + ".png");
             return image;
         }
 
@@ -371,9 +483,11 @@ namespace GardenWise
             return button;
         }
 
-        private static TextMeshProUGUI AddText(RectTransform rect, string content, float size, Color color, TextAlignmentOptions alignment)
+        private static TextMeshProUGUI AddText(RectTransform rect, string content, float size, Color color, TextAlignmentOptions alignment,
+                                               TMP_FontAsset font = null)
         {
             TextMeshProUGUI text = rect.gameObject.AddComponent<TextMeshProUGUI>();
+            if (font != null) text.font = font;
             text.text = content;
             text.fontSize = size;
             text.color = color;
@@ -382,49 +496,122 @@ namespace GardenWise
             return text;
         }
 
+        // the text field inside the bubble: a thin green line around it, like the bubble's inner line
         private static TMP_InputField AddInputField(Transform parent, string name, string placeholder)
         {
-            Sprite fieldSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
-            GameObject inputObject = TMP_DefaultControls.CreateInputField(new TMP_DefaultControls.Resources { inputField = fieldSprite });
+            Sprite line = AssetDatabase.LoadAssetAtPath<Sprite>(UiFolder + "/round_line.png");
+            GameObject inputObject = TMP_DefaultControls.CreateInputField(new TMP_DefaultControls.Resources { inputField = line });
             inputObject.name = name;
             foreach (Transform child in inputObject.GetComponentsInChildren<Transform>(true)) child.gameObject.layer = LayerMask.NameToLayer("UI");
 
             RectTransform rect = (RectTransform)inputObject.transform;
             rect.SetParent(parent, false);
-            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = new Vector2(0f, -368f);
-            rect.sizeDelta = new Vector2(636f, 60f);
+            Fixed(inputObject, -1f, 56f);
 
             Image background = inputObject.GetComponent<Image>();
-            background.sprite = fieldSprite;
+            background.sprite = line;
             background.type = Image.Type.Sliced;
-            background.color = PanelGreen;
+            background.pixelsPerUnitMultiplier = 2f;
+            background.color = ButtonGreen;
 
             TMP_InputField input = inputObject.GetComponent<TMP_InputField>();
             input.lineType = TMP_InputField.LineType.SingleLine;
             input.characterLimit = 200;
             input.customCaretColor = true;
-            input.caretColor = Color.white;
-            input.caretWidth = 3;
-            input.selectionColor = ButtonGreen;
+            input.caretColor = BodyText;
+            input.caretWidth = 2;
+            input.selectionColor = new Color32(0x40, 0x85, 0x47, 0xC0);
 
             TMP_Text text = input.textComponent;
             TMP_Text placeholderText = (TMP_Text)input.placeholder;
 
-            text.fontSize = 26f;
-            text.color = Color.white;
-            text.alignment = TextAlignmentOptions.MidlineLeft;
+            foreach (TMP_Text field in new[] { text, placeholderText })
+            {
+                if (Regular != null) field.font = Regular;
+                field.fontSize = 24f;
+                field.fontStyle = FontStyles.Normal;
+                field.alignment = TextAlignmentOptions.MidlineLeft;
+            }
 
+            text.color = BodyText;
             placeholderText.text = placeholder;
-            placeholderText.fontSize = 26f;
-            placeholderText.fontStyle = FontStyles.Normal;
-            placeholderText.color = new Color(1f, 1f, 1f, 0.5f);
-            placeholderText.alignment = TextAlignmentOptions.MidlineLeft;
+            placeholderText.color = new Color32(0xF5, 0xF5, 0xE8, 0x8C);
 
             // the default margins are made for a 30 px high field
-            input.textViewport.offsetMin = new Vector2(24f, 6f);
-            input.textViewport.offsetMax = new Vector2(-24f, -6f);
+            input.textViewport.offsetMin = new Vector2(16f, 4f);
+            input.textViewport.offsetMax = new Vector2(-16f, -4f);
             return input;
+        }
+
+        // Inter Regular and SemiBold (Fonts/*.ttf, OFL) as TextMesh Pro fonts, made once: every Latin letter used in
+        // French is drawn in advance and the atlas is then frozen, so playing never rewrites the asset.
+        // Anything else (a rare symbol from the model) falls back to the game's font
+        private static void PrepareFonts()
+        {
+            Regular = MakeFont("Inter-Regular");
+            SemiBold = MakeFont("Inter-SemiBold");
+            KeyShadow = MakeShadowMaterial(SemiBold, "Inter-SemiBold Shadow");
+        }
+
+        // the font's material with a dark underlay, for the letters of the keys
+        private static Material MakeShadowMaterial(TMP_FontAsset font, string name)
+        {
+            string path = FontFolder + "/" + name + ".mat";
+            Material existing = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (existing != null || font == null) return existing;
+
+            Material material = new Material(font.material) { name = name };
+            material.EnableKeyword("UNDERLAY_ON");
+            material.SetColor("_UnderlayColor", new Color(0f, 0f, 0f, 0.6f));
+            material.SetFloat("_UnderlayOffsetY", -0.5f);
+            material.SetFloat("_UnderlayDilate", 0.3f);
+            material.SetFloat("_UnderlaySoftness", 0.4f);
+            AssetDatabase.CreateAsset(material, path);
+            return material;
+        }
+
+        private static TMP_FontAsset MakeFont(string name)
+        {
+            string path = FontFolder + "/" + name + " SDF.asset";
+            TMP_FontAsset existing = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(path);
+            if (existing != null) return existing;
+
+            Font source = AssetDatabase.LoadAssetAtPath<Font>(FontFolder + "/" + name + ".ttf");
+            if (source == null)
+            {
+                Debug.LogError("[Gaston] Font missing: " + FontFolder + "/" + name + ".ttf");
+                return null;
+            }
+
+            TMP_FontAsset font = TMP_FontAsset.CreateFontAsset(source, 64, 6, UnityEngine.TextCore.LowLevel.GlyphRenderMode.SDFAA,
+                1024, 1024, AtlasPopulationMode.Dynamic, true);
+            font.name = name + " SDF";
+
+            StringBuilder characters = new StringBuilder();
+            for (char c = ' '; c <= '~'; c++) characters.Append(c);
+            for (char c = '\u00A0'; c <= '\u00FF'; c++) characters.Append(c);
+            characters.Append("ŒœŸ‘’‚“”„–—…•€′″«»");
+            font.TryAddCharacters(characters.ToString(), out string missing);
+            if (!string.IsNullOrEmpty(missing)) Debug.Log("[Gaston] " + name + " has no glyph for: " + missing);
+
+            AssetDatabase.CreateAsset(font, path);
+            for (int i = 0; i < font.atlasTextures.Length; i++)
+            {
+                font.atlasTextures[i].name = name + " Atlas " + i;
+                AssetDatabase.AddObjectToAsset(font.atlasTextures[i], font);
+            }
+
+            font.material.name = name + " Material";
+            AssetDatabase.AddObjectToAsset(font.material, font);
+
+            font.atlasPopulationMode = AtlasPopulationMode.Static;
+            if (TMP_Settings.defaultFontAsset != null)
+                font.fallbackFontAssetTable = new System.Collections.Generic.List<TMP_FontAsset> { TMP_Settings.defaultFontAsset };
+
+            EditorUtility.SetDirty(font);
+            AssetDatabase.SaveAssets();
+            Debug.Log("[Gaston] Font made: " + path);
+            return font;
         }
 
         // every sprite of a folder, in the order of the file names
@@ -512,7 +699,7 @@ namespace GardenWise
 
             importer.textureType = TextureImporterType.Sprite;
             importer.spriteImportMode = SpriteImportMode.Single;
-            // the thinking icons are little pixel-art fruits: kept sharp. The rest (icons of the panel) is smooth
+            // the thinking icons are little pixel-art fruits: kept sharp. The rest (portrait, shapes, icons) is smooth
             bool pixelArt = assetPath.StartsWith(GardenerBuilder.ArtFolder + "/ThinkingIcons/");
             importer.spritePixelsPerUnit = pixelArt ? 12.5f : 100f;
             importer.filterMode = pixelArt ? FilterMode.Point : FilterMode.Bilinear;
@@ -526,6 +713,9 @@ namespace GardenWise
             settings.spriteMeshType = SpriteMeshType.FullRect;
             settings.spriteGenerateFallbackPhysicsShape = false;
             importer.SetTextureSettings(settings);
+
+            // rounded shapes stretched as 9-slice: 16 px corners stay round at any size
+            if (Path.GetFileName(assetPath).StartsWith("round_")) importer.spriteBorder = new Vector4(20f, 20f, 20f, 20f);
         }
     }
 }

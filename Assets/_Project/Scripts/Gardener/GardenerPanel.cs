@@ -9,42 +9,44 @@ using UnityEngine.UI;
 
 namespace GardenWise
 {
-    // owner 5 - Gaston's panel: a header that folds and unfolds the dialogue, a speech bubble
-    // (loading icons, reply written letter by letter, tag saying where the reply comes from),
-    // a text field and a microphone button
+    // owner 5 - Gaston in the top-left corner: his portrait, and under it the key that opens his speech bubble.
+    // Open: the bubble (reply written letter by letter, growing line by line, hopping fruits while he thinks,
+    // an alert when the replies are pre-written), a text field, the microphone and its key, and the key that closes it
     public class GardenerPanel : MonoBehaviour
     {
         [SerializeField] private GardenerDialogue dialogue;
-        [Tooltip("Optional: without it the microphone button is hidden.")]
+        [Tooltip("Optional: without it the microphone is hidden.")]
         [SerializeField] private GardenerVoice voice;
 
-        [Header("Fold / unfold")]
-        [SerializeField] private RectTransform body;
-        [SerializeField] private RectTransform foldArrow;
-        [SerializeField] private bool openAtStart = true;
-        [SerializeField] private float foldSeconds = 0.15f;
+        [Header("Open / close")]
+        [Tooltip("The bubble and the line under it: shown only while open.")]
+        [SerializeField] private CanvasGroup bubbleGroup;
+        [Tooltip("The key under the portrait: shown only while closed.")]
+        [SerializeField] private GameObject openHint;
+        [SerializeField] private bool openAtStart;
+        [SerializeField] private float popSeconds = 0.12f;
 
         [Header("Bubble")]
-        [SerializeField] private TMP_Text questionText;
         [SerializeField] private TMP_Text replyText;
-        [SerializeField] private Graphic moreArrow;
+        [Tooltip("Clips the reply: as high as the lines written so far, at most Max Lines.")]
+        [SerializeField] private LayoutElement replyViewport;
+        [SerializeField] private int maxLines = 5;
         [Tooltip("Typewriter speed. 0 = the text appears at once.")]
         [SerializeField] private float charactersPerSecond = 45f;
         [TextArea]
-        [SerializeField] private string idleText = "Pose-moi une question sur ton jardin !";
+        [SerializeField] private string idleText = "Bonjour ! Pose-moi une question sur ton jardin.";
 
-        [Header("Waiting (the AI thinks, the microphone listens)")]
+        [Header("Thinking: hopping fruits and vegetables")]
         [SerializeField] private GameObject waitingGroup;
-        [SerializeField] private TMP_Text waitingText;
         [SerializeField] private Image[] iconSlots;
         [Tooltip("Any sprites, any number. They are shown a few at a time, the next ones the next time.")]
         [SerializeField] private Sprite[] thinkingIcons;
         [SerializeField] private float hopHeight = 12f;
         [SerializeField] private float hopSeconds = 0.9f;
 
-        [Header("Source tag")]
-        [SerializeField] private Image tagBackground;
-        [SerializeField] private TMP_Text tagText;
+        [Header("Alert: the replies are pre-written")]
+        [SerializeField] private GameObject alertGroup;
+        [SerializeField] private TMP_Text alertText;
 
         [Header("Keyword colours: [vert]word[/vert] and [or]word[/or]")]
         [SerializeField] private Color keywordGreen = new Color32(0x9B, 0xE0, 0x7A, 0xFF);
@@ -52,65 +54,66 @@ namespace GardenWise
 
         [Header("Input")]
         [SerializeField] private TMP_InputField inputField;
-        [SerializeField] private Image micIcon;
-        [SerializeField] private TMP_Text counterText;
         [Tooltip("After Enter, the field keeps the focus to type the next question. Off in the game: the player walks again.")]
         [SerializeField] private bool keepTypingAfterSend = true;
 
-        [Header("In the game")]
-        [Tooltip("With a GameManager in the scene, the panel only shows while a level is played (not in the menus).")]
-        [SerializeField] private bool onlyWhilePlaying = true;
-        [Tooltip("Desktop: a key to type a question, a key held down to talk.")]
+        [Header("Microphone (shown only while open)")]
+        [SerializeField] private GameObject voiceGroup;
+        [SerializeField] private Image micRing;
+        [SerializeField] private Image micIcon;
+        [SerializeField] private Image talkKeyFrame;
+
+        [Header("Keys")]
+        [Tooltip("Desktop: a key opens the bubble to type, a key held down to talk, a key closes it.")]
         [SerializeField] private bool keyboardShortcuts = true;
         [SerializeField] private KeyCode typeKey = KeyCode.T;
         [SerializeField] private KeyCode talkKey = KeyCode.V;
-        [SerializeField] private KeyCode foldKey = KeyCode.G;
+        [SerializeField] private KeyCode closeKey = KeyCode.Escape;
+        [SerializeField] private TMP_Text typeKeyText;
+        [SerializeField] private TMP_Text talkKeyText;
+        [SerializeField] private TMP_Text closeKeyText;
 
-        // the colours of the game's UI (UI_Canvas): dark green panels, green buttons, gold stars, white text
-        private static readonly Color32 PanelGreen = new Color32(0x1C, 0x3D, 0x2B, 0xFF);
-        private static readonly Color32 ButtonGreen = new Color32(0x40, 0x85, 0x47, 0xFF);
-        private static readonly Color32 Gold = new Color32(0xFF, 0xCC, 0x33, 0xFF);
-        private static readonly Color32 AiTagBack = Gold;
-        private static readonly Color32 AiTagText = PanelGreen;
-        private static readonly Color32 OfflineTagBack = new Color32(0xFF, 0xFF, 0xFF, 0x33);
-        private static readonly Color32 OfflineTagText = new Color32(0xFF, 0xFF, 0xFF, 0xFF);
-        private static readonly Color32 NoticeTagBack = ButtonGreen;
-        private static readonly Color32 NoticeTagText = new Color32(0xFF, 0xFF, 0xFF, 0xFF);
+        [Header("In the game")]
+        [Tooltip("With a GameManager in the scene, Gaston only shows while a level is played (not in the menus).")]
+        [SerializeField] private bool onlyWhilePlaying = true;
+
+        // the cream of the frames and keys, and the gold of the game for what is active
+        public static readonly Color32 Cream = new Color32(0xE3, 0xE0, 0xBF, 0xFF);
+        public static readonly Color32 Gold = new Color32(0xFF, 0xCC, 0x33, 0xFF);
 
         public bool IsOpen { get; private set; }
 
-        private float bodyHeight;
-        private float fold;
+        private float pop;
         private float shownCharacters;
         private int totalCharacters;
-        private bool replyIsFinal;
+        private float shownHeight = -1f;
         private Vector2[] iconRestPositions;
         private int nextIcon;
         private bool iconsWereSeen;
         private GardenerVoice.VoiceState shownVoiceState;
         private CanvasGroup visibility;
         private bool talkKeyHeld;
+        private bool showingVoiceText;
 
         private void Awake()
         {
             // rich text is on, but GardenerMarkup only lets our two colour markers through
             replyText.richText = true;
             replyText.parseCtrlCharacters = false;
-            questionText.richText = false;
-            questionText.text = "";
 
-            bodyHeight = body.sizeDelta.y;
             iconRestPositions = new Vector2[iconSlots.Length];
             for (int i = 0; i < iconSlots.Length; i++) iconRestPositions[i] = iconSlots[i].rectTransform.anchoredPosition;
 
-            if (micIcon != null && voice == null) micIcon.gameObject.SetActive(false);
+            typeKeyText.text = KeyName(typeKey);
+            talkKeyText.text = KeyName(talkKey);
+            closeKeyText.text = KeyName(closeKey);
 
             IsOpen = openAtStart;
-            fold = IsOpen ? 1f : 0f;
-            ApplyFold();
+            pop = IsOpen ? 1f : 0f;
+            ApplyPop();
 
             waitingGroup.SetActive(false);
-            tagBackground.gameObject.SetActive(false);
+            alertGroup.SetActive(false);
             SetReply(idleText, false);
             SkipTypewriter();
 
@@ -126,7 +129,6 @@ namespace GardenWise
             dialogue.ReplyFinished += HandleReplyFinished;
             inputField.onSubmit.AddListener(HandleSubmit);
             GameEvents.GameStateChanged += HandleGameStateChanged;
-            ShowCounter();
             ShowIfPlaying(GameManager.Instance != null ? GameManager.Instance.State : GameState.Playing);
         }
 
@@ -141,7 +143,7 @@ namespace GardenWise
 
         private void Update()
         {
-            UpdateFold();
+            UpdatePop();
             UpdateVoiceState();
             if (keyboardShortcuts) ReadShortcuts();
 
@@ -151,13 +153,13 @@ namespace GardenWise
                 replyText.maxVisibleCharacters = Mathf.FloorToInt(shownCharacters);
             }
 
-            ShowArrow();
+            UpdateReplyHeight();
             if (waitingGroup.activeInHierarchy) HopIcons();
         }
 
-        // ------------------------------------------------------------------ fold / unfold
+        // ------------------------------------------------------------------ open / close
 
-        // for the header button, and for the game (a controller button in VR for example)
+        // for a button, and for the game (a controller button in VR for example)
         public void Toggle()
         {
             if (IsOpen) Close();
@@ -167,12 +169,13 @@ namespace GardenWise
         public void Open()
         {
             IsOpen = true;
-            body.gameObject.SetActive(true);
+            bubbleGroup.gameObject.SetActive(true);
         }
 
         public void Close()
         {
             IsOpen = false;
+            if (inputField.isFocused) StopTyping();
         }
 
         public bool IsVisible
@@ -192,25 +195,48 @@ namespace GardenWise
             visibility.interactable = show;
             visibility.blocksRaycasts = show;
 
-            if (!show && inputField.isFocused) inputField.DeactivateInputField();
+            if (!show && inputField.isFocused) StopTyping();
+        }
+
+        private void UpdatePop()
+        {
+            float target = IsOpen ? 1f : 0f;
+            if (Mathf.Approximately(pop, target)) return;
+
+            pop = popSeconds <= 0f ? target : Mathf.MoveTowards(pop, target, Time.unscaledDeltaTime / popSeconds);
+            ApplyPop();
+        }
+
+        // the bubble fades in and grows a little from Gaston's side; the keys under the portrait follow what is shown
+        private void ApplyPop()
+        {
+            float eased = pop * pop * (3f - 2f * pop);
+            bubbleGroup.alpha = eased;
+            bubbleGroup.transform.localScale = Vector3.one * Mathf.Lerp(0.96f, 1f, eased);
+            bubbleGroup.interactable = bubbleGroup.blocksRaycasts = IsOpen;
+            bubbleGroup.gameObject.SetActive(eased > 0f || IsOpen);
+
+            openHint.SetActive(!IsOpen);
+            voiceGroup.SetActive(IsOpen && voice != null);
         }
 
         // ------------------------------------------------------------------ keyboard (desktop)
 
-        // T: type a question (the player stands still while the field has the focus, see DesktopInput), Esc: stop typing
-        // V held down: talk, released: Gaston listens to what was said. G: fold or unfold the panel
+        // T: open and type a question (the player stands still while the field has the focus, see DesktopInput)
+        // V held down: talk, released: Gaston listens to what was said. Esc: close
         private void ReadShortcuts()
         {
             if (!IsVisible) return;
 
-            if (inputField.isFocused)
+            if (Input.GetKeyDown(closeKey) && IsOpen)
             {
-                if (Input.GetKeyDown(KeyCode.Escape)) StopTyping();
+                Close();
                 return;
             }
 
+            if (inputField.isFocused) return;
+
             if (Input.GetKeyDown(typeKey)) StartCoroutine(StartTyping());
-            if (Input.GetKeyDown(foldKey)) Toggle();
 
             if (voice == null) return;
             if (Input.GetKeyDown(talkKey))
@@ -232,6 +258,7 @@ namespace GardenWise
         {
             Open();
             yield return null;
+            if (!inputField.isActiveAndEnabled) yield break;
             inputField.Select();
             inputField.ActivateInputField();
         }
@@ -243,22 +270,16 @@ namespace GardenWise
                 EventSystem.current.SetSelectedGameObject(null);
         }
 
-        private void UpdateFold()
+        private static string KeyName(KeyCode key)
         {
-            float target = IsOpen ? 1f : 0f;
-            if (Mathf.Approximately(fold, target)) return;
-
-            fold = foldSeconds <= 0f ? target : Mathf.MoveTowards(fold, target, Time.unscaledDeltaTime / foldSeconds);
-            ApplyFold();
-        }
-
-        // the body unrolls smoothly from under the header
-        private void ApplyFold()
-        {
-            float eased = fold * fold * (3f - 2f * fold);
-            body.sizeDelta = new Vector2(body.sizeDelta.x, bodyHeight * eased);
-            body.gameObject.SetActive(eased > 0f || IsOpen);
-            if (foldArrow != null) foldArrow.localScale = new Vector3(1f, IsOpen ? -1f : 1f, 1f);
+            switch (key)
+            {
+                case KeyCode.Escape: return "Échap";
+                case KeyCode.Return: return "Entrée";
+                case KeyCode.Space: return "Espace";
+                case KeyCode.Tab: return "Tab";
+                default: return key.ToString().Replace("Alpha", "");
+            }
         }
 
         // ------------------------------------------------------------------ dialogue events
@@ -266,28 +287,39 @@ namespace GardenWise
         private void HandleQuestionAsked(string question)
         {
             Open();
-            questionText.text = (IsEnglish() ? "You: " : "Toi : ") + question;
+            showingVoiceText = false;
             shownCharacters = 0f;
             totalCharacters = 0;
-            replyIsFinal = false;
-
-            tagBackground.gameObject.SetActive(false);
-            ShowWaiting(IsEnglish() ? "Gaston is thinking…" : "Gaston réfléchit…", true);
-            ShowCounter();
+            alertGroup.SetActive(false);
+            ShowWaiting();
         }
 
         // only the local model sends its reply piece by piece
         private void HandleReplyUpdated(string replySoFar)
         {
+            showingVoiceText = false;
             SetReply(replySoFar, true);
-            ShowTag(GardenerReplySource.LocalModel);
         }
 
         private void HandleReplyFinished(string reply, GardenerReplySource source)
         {
-            replyIsFinal = true;
+            showingVoiceText = false;
             SetReply(reply, false);
-            ShowTag(source);
+            ShowAlert(source);
+        }
+
+        // the player must know when the replies are pre-written tips and not an AI
+        private void ShowAlert(GardenerReplySource source)
+        {
+            bool tip = source == GardenerReplySource.OfflineTip;
+            alertGroup.SetActive(tip);
+            if (!tip) return;
+
+            bool configured = dialogue.OnlineConfigured;
+            if (IsEnglish())
+                alertText.text = configured ? "Online AI unavailable: pre-written reply" : "Online AI not set up: pre-written replies";
+            else
+                alertText.text = configured ? "IA distante indisponible : réponse préécrite" : "IA distante non configurée : réponses préécrites";
         }
 
         // ------------------------------------------------------------------ bubble
@@ -297,13 +329,13 @@ namespace GardenWise
         {
             shownCharacters = totalCharacters;
             replyText.maxVisibleCharacters = totalCharacters;
-            ShowArrow();
+            UpdateReplyHeight();
         }
 
         private void SetReply(string raw, bool streaming)
         {
             HideWaiting();
-            replyText.gameObject.SetActive(true);
+            replyViewport.gameObject.SetActive(true);
 
             replyText.text = GardenerMarkup.ToRichText(raw, keywordGreen, keywordGold, streaming);
             replyText.ForceMeshUpdate(true);
@@ -312,16 +344,52 @@ namespace GardenWise
             if (charactersPerSecond <= 0f) shownCharacters = totalCharacters;
             shownCharacters = Mathf.Min(shownCharacters, totalCharacters);
             replyText.maxVisibleCharacters = Mathf.FloorToInt(shownCharacters);
-            ShowArrow();
+            UpdateReplyHeight();
         }
 
-        private void ShowWaiting(string label, bool withIcons)
+        // number of lines written so far (at least one): the bubble grows with them
+        public int ShownLines
         {
-            replyText.gameObject.SetActive(false);
-            moreArrow.gameObject.SetActive(false);
-            waitingText.text = label;
+            get
+            {
+                TMP_TextInfo info = replyText.textInfo;
+                int visible = Mathf.Min(Mathf.FloorToInt(shownCharacters), info.characterCount);
+                return visible <= 0 ? 1 : info.characterInfo[visible - 1].lineNumber + 1;
+            }
+        }
 
-            bool hasIcons = withIcons && thinkingIcons != null && thinkingIcons.Length > 0;
+        // as high as the lines written, at most maxLines; beyond that the text scrolls up to show the last ones.
+        // Measured on the text itself (top of the first line shown to the bottom of the last one)
+        private void UpdateReplyHeight()
+        {
+            if (!replyViewport.gameObject.activeSelf) return;
+
+            TMP_TextInfo info = replyText.textInfo;
+            int lines = Mathf.Min(ShownLines, info.lineCount);
+            float top = 0f;
+            float height = replyText.fontSize * 1.45f;
+
+            if (lines > 0)
+            {
+                int first = Mathf.Max(0, lines - maxLines);
+                top = first == 0 ? 0f : info.lineInfo[first].ascender;
+                height = top - info.lineInfo[lines - 1].descender;
+            }
+
+            height = Mathf.Ceil(height);
+            if (Mathf.Approximately(height, shownHeight)) return;
+
+            shownHeight = height;
+            replyViewport.preferredHeight = height;
+            replyText.rectTransform.anchoredPosition = new Vector2(0f, -top);
+        }
+
+        private void ShowWaiting()
+        {
+            replyViewport.gameObject.SetActive(false);
+            shownHeight = -1f;
+
+            bool hasIcons = thinkingIcons != null && thinkingIcons.Length > 0;
             for (int i = 0; i < iconSlots.Length; i++)
             {
                 iconSlots[i].enabled = hasIcons;
@@ -345,60 +413,17 @@ namespace GardenWise
             waitingGroup.SetActive(false);
         }
 
-        // a hop in a few steps, not a smooth curve
+        // a hop in a few steps, not a smooth curve, like the pixel-art fruits
         private void HopIcons()
         {
             iconsWereSeen = true;
 
             for (int i = 0; i < iconSlots.Length; i++)
             {
-                float phase = Mathf.Repeat(Time.unscaledTime - i * 0.15f, hopSeconds) / hopSeconds;
+                float phase = Mathf.Repeat(Time.unscaledTime - i * 0.12f, hopSeconds) / hopSeconds;
                 float height = phase < 0.125f || phase >= 0.5f ? 0f : (phase >= 0.25f && phase < 0.375f ? hopHeight : hopHeight * 0.5f);
                 iconSlots[i].rectTransform.anchoredPosition = iconRestPositions[i] + Vector2.up * height;
             }
-        }
-
-        // the blinking arrow means "Gaston has finished"
-        private void ShowArrow()
-        {
-            bool finished = replyIsFinal && shownCharacters >= totalCharacters && replyText.gameObject.activeSelf;
-            if (moreArrow.gameObject.activeSelf != finished) moreArrow.gameObject.SetActive(finished);
-            if (finished) moreArrow.enabled = Mathf.Repeat(Time.unscaledTime, 1f) < 0.5f;
-        }
-
-        // the player must always know if the text comes from an AI (online or local) or from a pre-written tip
-        private void ShowTag(GardenerReplySource source)
-        {
-            switch (source)
-            {
-                case GardenerReplySource.LocalModel:
-                    tagText.text = IsEnglish() ? "Local AI" : "IA locale";
-                    tagBackground.color = AiTagBack;
-                    tagText.color = AiTagText;
-                    break;
-                case GardenerReplySource.OnlineModel:
-                    tagText.text = IsEnglish() ? "Online AI" : "IA en ligne";
-                    tagBackground.color = AiTagBack;
-                    tagText.color = AiTagText;
-                    break;
-                case GardenerReplySource.OfflineTip:
-                    tagText.text = IsEnglish() ? "Offline tip" : "Hors ligne · conseil préécrit";
-                    tagBackground.color = OfflineTagBack;
-                    tagText.color = OfflineTagText;
-                    break;
-                default:
-                    tagText.text = "Info";
-                    tagBackground.color = NoticeTagBack;
-                    tagText.color = NoticeTagText;
-                    break;
-            }
-
-            tagBackground.gameObject.SetActive(true);
-        }
-
-        private void ShowCounter()
-        {
-            if (counterText != null) counterText.text = "Questions : " + dialogue.QuestionCount;
         }
 
         private bool IsEnglish()
@@ -432,14 +457,12 @@ namespace GardenWise
         }
 
         // the microphone did not start (models still loading, no microphone, refused by the system): say why at once,
-        // otherwise the panel opens and nothing happens
+        // otherwise the bubble opens and nothing happens
         private void ShowVoiceProblem()
         {
             if (voice.State != GardenerVoice.VoiceState.Idle || voice.LastProblem.Length == 0 || dialogue.IsAnswering) return;
             Open();
-            replyIsFinal = false;
-            questionText.text = "";
-            tagBackground.gameObject.SetActive(false);
+            alertGroup.SetActive(false);
             SetReply(voice.LastProblem, false);
             SkipTypewriter();
         }
@@ -449,30 +472,40 @@ namespace GardenWise
             if (voice == null || voice.State == shownVoiceState) return;
 
             shownVoiceState = voice.State;
-            if (micIcon != null) micIcon.color = shownVoiceState == GardenerVoice.VoiceState.Listening ? Gold : Color.white;
+            bool listening = shownVoiceState == GardenerVoice.VoiceState.Listening;
+            Color colour = listening ? (Color)Gold : Cream;
+            micRing.color = colour;
+            micIcon.color = colour;
+            talkKeyFrame.color = colour;
+            talkKeyText.color = colour;
 
-            if (shownVoiceState == GardenerVoice.VoiceState.Listening)
+            if (listening)
             {
                 Open();
-                questionText.text = "";
-                tagBackground.gameObject.SetActive(false);
-                ShowWaiting(talkKeyHeld
-                    ? (IsEnglish() ? "I'm listening… release " + talkKey + " when you're done." : "Je t'écoute… relâche " + talkKey + " quand tu as fini.")
-                    : (IsEnglish() ? "I'm listening… click the mic when you're done." : "Je t'écoute… reclique sur le micro quand tu as fini."), false);
+                alertGroup.SetActive(false);
+                string key = "[or]" + KeyName(talkKey) + "[/or]";
+                SetReply(talkKeyHeld
+                    ? (IsEnglish() ? "I'm listening… release " + key + " when you're done." : "Je t'écoute… relâche " + key + " quand tu as fini.")
+                    : (IsEnglish() ? "I'm listening… click the microphone when you're done." : "Je t'écoute… reclique sur le micro quand tu as fini."), false);
+                SkipTypewriter();
+                showingVoiceText = true;
             }
             else if (shownVoiceState == GardenerVoice.VoiceState.Transcribing)
             {
-                ShowWaiting(IsEnglish() ? "Let me write that down…" : "Je note ce que tu as dit…", false);
+                SetReply(IsEnglish() ? "Let me write that down…" : "Je note ce que tu as dit…", false);
+                SkipTypewriter();
+                showingVoiceText = true;
             }
-            else if (waitingGroup.activeSelf && !dialogue.IsAnswering)
+            else if (showingVoiceText)
             {
-                // nothing was understood: say why instead of leaving the bubble waiting
-                replyIsFinal = false;
+                showingVoiceText = false;
+                // nothing was understood: say why instead of leaving "I'm listening" in the bubble
                 SetReply(voice.LastProblem.Length > 0 ? voice.LastProblem : idleText, false);
                 SkipTypewriter();
             }
         }
     }
+
 
     // turns the model's text into safe TextMesh Pro text
     // only [vert]...[/vert] and [or]...[/or] become colours, everything else is shown exactly as written:

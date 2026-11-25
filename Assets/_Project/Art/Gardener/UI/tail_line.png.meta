@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 67c6804c55a98b348ab32d10839591f8
+guid: 403b9c3e725454ebeb83743a0e83bb89
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -7561801232636907058
-    second: icon_chevron_0
+      213: -4805684702480839206
+    second: tail_line_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -37,7 +37,7 @@ TextureImporter:
   maxTextureSize: 2048
   textureSettings:
     serializedVersion: 2
-    filterMode: 0
+    filterMode: 1
     aniso: 1
     mipBias: 0
     wrapU: 1
@@ -51,7 +51,7 @@ TextureImporter:
   spriteMeshType: 0
   alignment: 0
   spritePivot: {x: 0.5, y: 0.5}
-  spritePixelsToUnits: 12.5
+  spritePixelsToUnits: 100
   spriteBorder: {x: 0, y: 0, z: 0, w: 0}
   spriteGenerateFallbackPhysicsShape: 0
   alphaUsage: 1
@@ -115,13 +115,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: icon_chevron_0
+      name: tail_line_0
       rect:
         serializedVersion: 2
         x: 0
         y: 0
-        width: 96
-        height: 96
+        width: 32
+        height: 36
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -130,8 +130,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: ec1f092d7d51f0790800000000000000
-      internalID: -7561801232636907058
+      spriteID: addc9168937ce4db0800000000000000
+      internalID: -4805684702480839206
       vertices: []
       indices: 
       edges: []

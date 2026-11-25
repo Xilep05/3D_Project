@@ -55,5 +55,6 @@ Next step: replace the simple shapes by the free CC0 models of Quaternius (Styli
 
 ## Gaston: controls
 
-- Gaston on desktop: **T** to type a question (Enter sends, Esc stops, the player stands still meanwhile), **V** held down to talk (Gaston listens while the key is down), **G** folds or unfolds the panel (the header arrow does the same). Gaston uses the default microphone of the computer, or the one named in the Microphone field of `GardenerVoice`.
+- Gaston sits in the top-left corner: his portrait, and under it the **T** key. **T** opens his speech bubble and the text field (Enter sends, the player stands still while typing), **V** held down to talk (the microphone and the V key show only while the bubble is open, and turn gold while he listens), **Esc** closes the bubble. Gaston uses the default microphone of the computer, or the one named in the Microphone field of `GardenerVoice`.
+- When the replies are pre-written tips (no online AI set up, or unreachable), the bubble says so in gold at its top.
 - Gaston answers with an online model when `Assets/StreamingAssets/ai_config.json` is filled in (see the README), else with the local model, else with written tips.
