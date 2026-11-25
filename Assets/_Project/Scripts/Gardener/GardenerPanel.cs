@@ -29,7 +29,7 @@ namespace GardenWise
         [SerializeField] private TMP_Text replyText;
         [Tooltip("Clips the reply: as high as the lines written so far, at most Max Lines.")]
         [SerializeField] private LayoutElement replyViewport;
-        [SerializeField] private int maxLines = 5;
+        [SerializeField] private int maxLines = 8;
         [Tooltip("Typewriter speed. 0 = the text appears at once.")]
         [SerializeField] private float charactersPerSecond = 45f;
         [Tooltip("{talk} becomes the name of the talk key.")]
@@ -44,7 +44,7 @@ namespace GardenWise
         [SerializeField] private float hopHeight = 12f;
         [SerializeField] private float hopSeconds = 0.9f;
 
-        [Header("Alert: the replies are pre-written")]
+        [Header("Alert: the online AI is missing, or no AI could answer")]
         [SerializeField] private GameObject alertGroup;
         [SerializeField] private TMP_Text alertText;
 
@@ -83,6 +83,7 @@ namespace GardenWise
         private float shownCharacters;
         private int totalCharacters;
         private float shownHeight = -1f;
+        private float shownTop;
         private Vector2[] iconRestPositions;
         private int nextIcon;
         private bool iconsWereSeen;
@@ -279,18 +280,22 @@ namespace GardenWise
             ShowAlert(source);
         }
 
-        // the player must know when the replies are pre-written tips and not an AI
+        // the player must know when the online AI is not used (the local AI is slower and simpler), and when no AI answered
         private void ShowAlert(GardenerReplySource source)
         {
-            bool tip = source == GardenerReplySource.OfflineTip;
-            alertGroup.SetActive(tip);
-            if (!tip) return;
-
+            bool english = IsEnglish();
             bool configured = dialogue.OnlineConfigured;
-            if (IsEnglish())
-                alertText.text = configured ? "Online AI unavailable: pre-written reply" : "Online AI not set up: pre-written replies";
-            else
-                alertText.text = configured ? "IA distante indisponible : réponse préécrite" : "IA distante non configurée : réponses préécrites";
+            string text = null;
+
+            if (source == GardenerReplySource.Unavailable)
+                text = english ? "No AI available" : "Aucune IA disponible";
+            else if (source == GardenerReplySource.LocalModel)
+                text = configured
+                    ? (english ? "Online AI unavailable: local AI" : "IA distante indisponible : IA locale")
+                    : (english ? "Online AI not set up: local AI" : "IA distante non configurée : IA locale");
+
+            alertGroup.SetActive(text != null);
+            if (text != null) alertText.text = text;
         }
 
         // ------------------------------------------------------------------ bubble
@@ -347,10 +352,12 @@ namespace GardenWise
                 height = top - info.lineInfo[lines - 1].descender;
             }
 
+            // past maxLines the height stays the same but the text moves up: check both
             height = Mathf.Ceil(height);
-            if (Mathf.Approximately(height, shownHeight)) return;
+            if (Mathf.Approximately(height, shownHeight) && Mathf.Approximately(top, shownTop)) return;
 
             shownHeight = height;
+            shownTop = top;
             replyViewport.preferredHeight = height;
             replyText.rectTransform.anchoredPosition = new Vector2(0f, -top);
         }

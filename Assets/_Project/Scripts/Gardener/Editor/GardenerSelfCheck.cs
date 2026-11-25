@@ -257,9 +257,9 @@ namespace GardenWise
 
             panel.SkipTypewriter();
             string firstReply = reply.GetParsedText();
-            Check(firstReply.StartsWith("Arrose le matin") && lastSource == GardenerReplySource.OfflineTip, "the whole offline tip is shown once written");
-            Check(alert.activeSelf && alertText.text.Contains("non configurée") && alertText.text.Contains("préécrites"),
-                "a pre-written tip comes with the alert: online AI not set up");
+            Check(firstReply.StartsWith("Désolé, je ne peux pas réfléchir") && firstReply.Contains("pas configurée") && lastSource == GardenerReplySource.Unavailable,
+                "with no AI, Gaston says he cannot answer and why, no pre-written answer");
+            Check(alert.activeSelf && alertText.text == "Aucune IA disponible", "with the alert: no AI available");
             Check(!waiting.activeSelf && !dialogue.IsAnswering, "no loading icons, dialogue free again");
             Capture("GardenerSelfCheck_offline.png");
 
@@ -269,7 +269,8 @@ namespace GardenWise
             for (int i = 0; i < 12; i++) dialogue.Ask("Question " + i);
             panel.SkipTypewriter();
             Check(eventsHeard == 13 && dialogue.QuestionCount == 13, "13 questions in a row are all sent, there is no limit");
-            Check(reply.GetParsedText() != firstReply && alert.activeSelf, "the tips rotate and keep the alert");
+            Check(reply.GetParsedText() == firstReply && lastSource == GardenerReplySource.Unavailable && alert.activeSelf,
+                "every question without AI gets the same honest answer, never a made-up tip");
 
             // 4. a model played by the test: thinking, streaming, colours, safety
             Action<string> pushPartial = null;
@@ -296,7 +297,8 @@ namespace GardenWise
             complete("Ta [vert]laitue[/vert] a soif. <b>Arrose</b>-la [or]ce soir[/or] !");
             panel.SkipTypewriter();
             Check(reply.GetParsedText() == "Ta laitue a soif. <b>Arrose</b>-la ce soir !", "final reply: markers become colours, HTML stays visible as plain text");
-            Check(!alert.activeSelf, "a reply of the AI has no alert");
+            Check(alert.activeSelf && alertText.text.Contains("non configurée") && alertText.text.Contains("IA locale"),
+                "a reply of the local AI says the online AI is not set up");
 
             dialogue.Ask("Première question");
             Action<string> lateAnswer = complete;
@@ -310,9 +312,10 @@ namespace GardenWise
             dialogue.Ask("Question pendant une panne");
             complete("");
             panel.SkipTypewriter();
-            Check(alert.activeSelf && reply.GetParsedText().Length > 0, "an empty AI answer falls back to a tip, with the alert");
+            Check(alert.activeSelf && lastSource == GardenerReplySource.Unavailable && reply.GetParsedText().StartsWith("Désolé"),
+                "an empty AI answer: Gaston says he cannot answer, with the alert");
 
-            // the bubble grows line by line while the text is written, up to five lines
+            // the bubble grows line by line while the text is written, up to eight lines
             const string longReply = "Ta [vert]laitue[/vert] manque d'eau : sa terre est à [or]22[/or] alors qu'elle aime entre 50 et 80. " +
                                      "Arrose-la doucement [vert]ce soir[/vert] avec l'eau du récupérateur, pas en plein soleil.";
             dialogue.Ask("Une longue question");
@@ -328,13 +331,16 @@ namespace GardenWise
                 "the bubble grows with the lines written (" + linesWhileWriting + " then " + lines + " lines)");
             Capture("GardenerSelfCheck_long.png");
 
-            dialogue.Ask("Une très longue question");
-            complete(longReply + " " + longReply + " Demain c'est la [or]canicule[/or], pense au paillage !");
+            // a long written line (the replies of the models are cut at three sentences before this)
+            dialogue.Say(longReply + " " + longReply + " " + longReply + " Demain c'est la [or]canicule[/or], pense au paillage !");
+            await Task.Delay(1500);
+            Canvas.ForceUpdateCanvases();
+            float scrollWhileWriting = reply.rectTransform.anchoredPosition.y;
             panel.SkipTypewriter();
             await Task.Delay(100);
             Canvas.ForceUpdateCanvases();
-            Check(panel.ShownLines > 5 && viewport.preferredHeight < 5.5f * 46f && reply.rectTransform.anchoredPosition.y > 0f,
-                "beyond five lines the bubble stops growing and shows the last lines (" + panel.ShownLines + " lines)");
+            Check(panel.ShownLines > 8 && viewport.preferredHeight < 8.5f * 46f && reply.rectTransform.anchoredPosition.y > scrollWhileWriting,
+                "beyond eight lines the bubble stops growing and scrolls to the last lines (" + panel.ShownLines + " lines)");
 
             // 5. an online model played by the test: first choice, and the local model takes over when it fails
             string onlineMessage = null;
@@ -357,14 +363,15 @@ namespace GardenWise
                 "when the online model fails, the same question goes to the local model");
             complete("Réponse du modèle local");
             panel.SkipTypewriter();
-            Check(lastSource == GardenerReplySource.LocalModel && !alert.activeSelf, "and that reply has no alert either");
+            Check(lastSource == GardenerReplySource.LocalModel && alert.activeSelf && alertText.text.Contains("indisponible"),
+                "and the alert says the online AI is unavailable, the local AI answered");
 
             dialogue.UseLocalModel = false;
             dialogue.Ask("Question sans rien");
             onlineDone("");
             panel.SkipTypewriter();
-            Check(lastSource == GardenerReplySource.OfflineTip && alert.activeSelf && alertText.text.Contains("indisponible"),
-                "with no model answering, a tip with the alert: online AI unavailable");
+            Check(lastSource == GardenerReplySource.Unavailable && alert.activeSelf && reply.GetParsedText().Contains("ne répond pas"),
+                "with no model answering, Gaston says the online AI does not answer");
 
             panel.Close();
             await WaitUntil(() => !bubbleGroup.gameObject.activeSelf, 3f);
@@ -412,6 +419,23 @@ namespace GardenWise
             await WaitUntil(() => !dialogue.IsAnswering, 30f);
             Check(lastSource() == GardenerReplySource.OnlineModel && lastReply().Length > 0,
                 "the real online model answers (" + dialogue.OnlineStatus + "): " + lastReply());
+            Check(lastReply().Length < 320, "its reply is short enough for the bubble (" + lastReply().Length + " characters)");
+
+            // a sentence the voice may give when it heard wrong: Gaston must say he did not understand, not make up an answer
+            await PaceOnlineQuestion();
+            dialogue.Ask("Banane volante combien chaussette le mardi ?");
+            await WaitUntil(() => !dialogue.IsAnswering, 30f);
+            string lower = lastReply().ToLowerInvariant();
+            Check(lastSource() == GardenerReplySource.OnlineModel && (lower.Contains("compris") || lower.Contains("répéter") || lower.Contains("répète")),
+                "a sentence that makes no sense: Gaston says he did not understand (" + lastReply() + ")");
+
+            // how to do something: explained with the game's keys, not with real gardening techniques
+            await PaceOnlineQuestion();
+            dialogue.Ask("Comment je plante des tomates ?");
+            await WaitUntil(() => !dialogue.IsAnswering, 30f);
+            lower = lastReply().ToLowerInvariant();
+            Check(lastSource() == GardenerReplySource.OnlineModel && (lower.Contains("1") || lower.Contains("sac")) && !lower.Contains(" cm"),
+                "how to plant: explained with the seed bag of the game (" + lastReply() + ")");
         }
 
         // real questions to the real model: the answers are written to Logs/GardenerSelfCheck_llm_<model>.txt

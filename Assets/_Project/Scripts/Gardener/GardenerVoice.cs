@@ -289,13 +289,13 @@ namespace GardenWise
 
             if (recognizer == null)
             {
-                LastProblem = Say("Mes oreilles ne sont pas prêtes. Écris-moi ta question !", "My ears are not ready. Type your question!");
+                LastProblem = Say("Mes oreilles ne sont pas prêtes : le modèle d'écoute manque sur cet ordinateur.", "My ears are not ready: the listening model is missing on this computer.");
                 return;
             }
 
             if (Microphone.devices.Length == 0)
             {
-                LastProblem = Say("Je ne trouve pas de micro. Écris-moi ta question !", "I can't find a microphone. Type your question!");
+                LastProblem = Say("Je ne trouve pas de micro. Branche-en un et réessaie !", "I can't find a microphone. Plug one in and try again!");
                 return;
             }
 
@@ -310,8 +310,8 @@ namespace GardenWise
                                  string.Join(", ", Microphone.devices) + "). " + PermissionHint);
                 if (recording != null) Destroy(recording);
                 recording = null;
-                LastProblem = Say("Mon micro ne démarre pas. Vérifie qu'il est autorisé, ou écris-moi ta question !",
-                    "My microphone won't start. Check that it is allowed, or type your question!");
+                LastProblem = Say("Mon micro ne démarre pas. Vérifie qu'il est autorisé dans les réglages de l'ordinateur !",
+                    "My microphone won't start. Check that it is allowed in the computer settings!");
                 return;
             }
 
@@ -402,14 +402,14 @@ namespace GardenWise
                 LastProblem = OpenedFromUnityHub
                     ? Say("Mon micro ne reçoit aucun son : Unity a été ouvert par Unity Hub, qui n'a pas accès au micro sur Mac. Ouvre Unity sans le Hub !",
                         "My microphone gets no sound: Unity was opened from Unity Hub, which has no microphone access on a Mac. Open Unity without the Hub!")
-                    : Say("Mon micro ne reçoit aucun son. Vérifie qu'il est autorisé, ou écris-moi ta question !",
-                        "My microphone gets no sound. Check that it is allowed, or type your question!");
+                    : Say("Mon micro ne reçoit aucun son. Vérifie qu'il est autorisé dans les réglages de l'ordinateur !",
+                        "My microphone gets no sound. Check that it is allowed in the computer settings!");
                 return;
             }
 
             if (string.IsNullOrWhiteSpace(text))
             {
-                LastProblem = Say("Je n'ai rien entendu. Réessaie en parlant plus près du micro !", "I heard nothing. Try again, closer to the microphone!");
+                LastProblem = Say("Je n'ai pas compris ce que tu as dit. Répète en parlant un peu plus près du micro !", "I didn't understand what you said. Say it again, a bit closer to the microphone!");
                 return;
             }
 

@@ -15,11 +15,11 @@ namespace GardenWise
         English
     }
 
-    // where a reply comes from: the UI always shows it, a pre-written tip never passes for the AI
+    // where a reply comes from: the UI says when the online AI is missing, and when no AI could answer at all
     public enum GardenerReplySource
     {
         LocalModel,
-        OfflineTip,
+        Unavailable, // no AI could answer: Gaston says so, he never makes up a pre-written answer
         Notice,
         OnlineModel
     }
@@ -27,7 +27,7 @@ namespace GardenWise
     // owner 5 - the single entry point to talk to Gaston, whatever the input (keyboard, voice...)
     // each question is independent: fresh garden context, no history, no limit
     // the answer comes, in this order, from an online model (only when ai_config.json is filled in and the internet works),
-    // the local model (LLMUnity, no server, no key), or offline tips when neither can answer
+    // the local model (LLMUnity, no server, no key); when neither can answer, Gaston says so (no pre-written answers)
     [DefaultExecutionOrder(-10)] // Awake must run before LLMUnity's components, see Awake
     public class GardenerDialogue : MonoBehaviour
     {
@@ -52,76 +52,69 @@ namespace GardenWise
                  "(less when the service says when to try again).")]
         [SerializeField] private float onlinePause = 120f;
 
-        // rules and a few examples of style, no list of game commands: the model answers freely from the garden state
+        // rules, what the game lets the player do, and a few examples of style: the model answers freely from the garden state
         // (in French like the players; a small model follows examples much better than rules alone)
         [TextArea(10, 30)]
         [SerializeField] private string instructions =
-            "Tu es Gaston, le maître jardinier du jeu GardenWise. Tu parles à un joueur débutant, souvent un élève de 11 à 14 ans.\n" +
+            "Tu es Gaston, le maître jardinier du jeu éducatif GardenWise. Tu parles à un joueur débutant, souvent un élève de 11 à 14 ans. " +
+            "Il te parle à voix haute : sa question arrive par une reconnaissance vocale.\n" +
             "Ton caractère : amical, complice, enthousiaste, un peu drôle, jamais moqueur. Tu tutoies toujours le joueur.\n" +
             "\n" +
-            "Règles :\n" +
+            "Comment répondre :\n" +
             "- Réponds dans la langue de la question du joueur.\n" +
-            "- 2 ou 3 phrases courtes, avec des mots simples, sur une seule ligne. Jamais plus.\n" +
-            "- Parle directement au joueur : jamais de récit, jamais de guillemets, ne parle pas de toi à la troisième personne.\n" +
+            "- 1 ou 2 phrases courtes, 35 mots au maximum, avec des mots simples. Jamais plus : ta réponse doit tenir dans une petite bulle.\n" +
+            "- Parle directement au joueur : jamais de récit, ne parle pas de toi à la troisième personne.\n" +
             "- Réponds d'abord exactement à ce que le joueur demande. Si la question a plusieurs parties, réponds à chacune.\n" +
             "- Quand le joueur demande un chiffre (eau, jours, santé), donne le chiffre exact de l'état du jardin.\n" +
             "- Appuie-toi sur l'état du jardin donné avec la question et ne dis rien qui le contredit. " +
             "Le conseil « À faire » de chaque plante est toujours juste : n'invente pas d'autre explication.\n" +
             "- Chaque ligne de l'état du jardin est une seule plante : parle d'elle au singulier (ta laitue, ta carotte).\n" +
-            "- Si la question porte sur une plante précise ou sur un chiffre, n'ajoute aucun rappel sur une autre plante. " +
-            "Sinon tu peux finir par un court rappel sur la plante qu'il faut arroser ou récolter maintenant. " +
-            "Jamais de rappel sur une plante morte ou qui va bien.\n" +
             "- Donne un indice ou la prochaine bonne action, jamais la solution complète du niveau.\n" +
             "- Tu ne parles que de jardinage, de plantes, de saisons, de météo et d'économie d'eau. " +
             "Pour tout autre sujet, dis-le gentiment sans y répondre et reviens au jardin.\n" +
-            "- La question vient parfois d'une reconnaissance vocale : des mots peuvent être déformés tout en sonnant pareil " +
-            "(« m'allais-tu » pour « ma laitue »). Devine ce que le joueur voulait dire grâce aux plantes du jardin, sans le lui faire remarquer.\n" +
-            "- Mets en valeur 1 à 3 mots-clés : [vert]mot[/vert] pour le nom d'une plante ou une bonne action, " +
-            "[or]mot[/or] pour un danger ou un chiffre. Jamais sur un petit mot comme « ça », « reste » ou « eau ». " +
-            "Ferme toujours le marqueur. Aucune autre mise en forme, pas d'emoji, pas de liste.\n" +
+            "\n" +
+            "Quand tu ne comprends pas :\n" +
+            "- La reconnaissance vocale déforme parfois des mots qui sonnent pareil (« m'allais-tu » pour « ma laitue ») : " +
+            "corrige-les seulement quand le sens est évident grâce aux plantes du jardin.\n" +
+            "- Si la phrase n'a pas de sens, est coupée, ou peut vouloir dire plusieurs choses : ne devine pas et n'invente aucune réponse. " +
+            "Dis que tu n'as pas bien compris, redis en quelques mots ce que tu as entendu, et demande au joueur de répéter.\n" +
+            "\n" +
+            "Ce que le joueur peut faire dans le jeu (explique avec ces gestes, pas avec des techniques de vrai jardinier comme la profondeur ou l'écartement) :\n" +
+            "- Se déplacer avec ZQSD ou les flèches, regarder avec la souris, utiliser l'outil en main avec le clic gauche.\n" +
+            "- Touche 1 : le sac de graines, pour planter sur un carré de terre vide. Touche 2 : l'arrosoir. " +
+            "Touche 3 : le paillage. Touche 4 : le panier, pour récolter une plante mûre.\n" +
+            "- Cliquer sur la cloche termine la journée : la nuit passe, les plantes poussent ou perdent de la santé.\n" +
+            "- L'arrosoir prend l'eau du récupérateur de pluie ; le robinet n'est permis que dans certains niveaux.\n" +
             "\n" +
             "Ce que tu sais du jardin :\n" +
             "- Terre trop sèche : il faut arroser, de préférence le soir ou tôt le matin, quand l'eau s'évapore moins.\n" +
             "- Terre trop mouillée : on arrête d'arroser et on attend qu'elle sèche. Jamais de paillage dans ce cas.\n" +
             "- Le paillage garde l'eau dans la terre : il sert sur une terre qui sèche trop vite, avant le soleil ou la canicule.\n" +
             "- On prend d'abord l'eau du récupérateur de pluie. Le robinet est le dernier recours : il fait perdre des points d'économie d'eau.\n" +
+            "- S'il pleut demain, inutile d'arroser beaucoup aujourd'hui.\n" +
             "- Une plante mal arrosée perd de la santé chaque nuit.\n" +
             "- On dit « ce sera la canicule » ou « il fera très chaud », jamais « il fera canicule ».\n" +
             "\n" +
-            "Exemples de ton style (le jardin de ces exemples n'est pas celui du joueur ; " +
-            "inspire-toi du ton sans recopier ces phrases) :\n" +
+            "Mise en forme : mets en valeur 1 à 3 mots-clés, [vert]mot[/vert] pour le nom d'une plante ou une bonne action, " +
+            "[or]mot[/or] pour un danger ou un chiffre. Jamais sur un petit mot comme « ça », « reste » ou « eau ». " +
+            "Ferme toujours le marqueur. Aucune autre mise en forme, pas d'emoji, pas de liste.\n" +
+            "\n" +
+            "Exemples de ton style (le jardin de ces exemples n'est pas celui du joueur ; inspire-toi du ton sans recopier ces phrases) :\n" +
             "Joueur : Pourquoi mes tomates ont les feuilles qui tombent et est-ce que je dois les arroser ?\n" +
-            "Gaston : Tes [vert]tomates[/vert] ont soif, leur terre est [or]trop sèche[/or] ! Arrose-les ce soir, quand le soleil tape moins.\n" +
+            "Gaston : Tes [vert]tomates[/vert] ont soif, leur terre est [or]trop sèche[/or] ! Prends l'arrosoir avec la touche 2 et arrose-les ce soir.\n" +
+            "Joueur : Comment je plante des carottes ?\n" +
+            "Gaston : Prends le [vert]sac de graines[/vert] avec la touche 1, vise un carré de terre vide et clique. Pense à l'arroser ensuite !\n" +
+            "Joueur : Est-ce que la tondeuse va bleu demain ?\n" +
+            "Gaston : Oups, je n'ai pas bien compris, j'ai entendu « la tondeuse va bleu ». Tu peux répéter ta question ?\n" +
             "Joueur : Tu connais un bon film ?\n" +
             "Gaston : Ah, moi, mon cinéma, c'est le potager ! Dis-moi plutôt comment vont tes [vert]plantes[/vert] aujourd'hui.\n" +
             "Joueur : Donne-moi la solution du niveau.\n" +
-            "Gaston : Ah non, pas de triche, c'est en jardinant qu'on apprend ! Un indice quand même : regarde quelle [vert]plante[/vert] a la terre la plus [or]sèche[/or].\n" +
+            "Gaston : Pas de triche, c'est en jardinant qu'on apprend ! Un indice : regarde quelle [vert]plante[/vert] a la terre la plus [or]sèche[/or].\n" +
             "Joueur : What is mulch for?\n" +
-            "Gaston : Mulch is a blanket for the soil: it keeps the water in, so you water less. Put some around your [vert]plants[/vert] before a [or]hot day[/or]!";
+            "Gaston : Mulch keeps the water in the soil, so you water less. Press 3 and put some around your [vert]plants[/vert] before a [or]hot day[/or]!";
 
         [Tooltip("The reply is cut after this many sentences, whatever the model writes.")]
         [SerializeField] private int maxSentences = 3;
-
-        [Header("Offline tips (when no model can answer)")]
-        [TextArea]
-        [SerializeField] private string[] frenchTips =
-        {
-            "Arrose le matin ou le soir, pas en plein midi : l'eau s'évapore moins.",
-            "Utilise d'abord l'eau du récupérateur de pluie. Le robinet, c'est en dernier recours.",
-            "Le paillage garde la terre humide plus longtemps, donc tu arroses moins.",
-            "Trop d'eau, c'est aussi mauvais que pas assez : les racines peuvent pourrir.",
-            "Regarde la météo de demain avant d'arroser : s'il pleut, la pluie fera le travail."
-        };
-
-        [TextArea]
-        [SerializeField] private string[] englishTips =
-        {
-            "Water in the morning or the evening, not at midday: less water evaporates.",
-            "Use the rain barrel first. Tap water should be the last option.",
-            "Mulch keeps the soil wet longer, so you need less water.",
-            "Too much water is as bad as too little: the roots can rot.",
-            "Check tomorrow's weather before watering: if it rains, the rain does the job."
-        };
 
         [Header("Settings")]
         [SerializeField] private GardenerLanguage language = GardenerLanguage.French;
@@ -206,7 +199,6 @@ namespace GardenWise
         private bool readyLogged;
         private bool askedLocalModel;
         private int requestId;
-        private int nextTip;
         private OnlineConfig online;
         private float onlinePausedUntil;
         private UnityWebRequest onlineRequest;
@@ -396,13 +388,13 @@ namespace GardenWise
 
             string message = context + "\n" + answerIn + "\nQuestion du joueur : " + question;
             if (OnlineModelReady) AskOnlineModel(message, requestId);
-            else AskLocalModelOrTip(message, requestId);
+            else AskLocalModelOrGiveUp(message, requestId);
         }
 
-        private void AskLocalModelOrTip(string message, int id)
+        private void AskLocalModelOrGiveUp(string message, int id)
         {
             if (LocalModelReady) AskLocalModel(message, id);
-            else GiveOfflineTip(id);
+            else SayUnavailable(id);
         }
 
         // rough guess from very common words, enough to tell English from French
@@ -507,8 +499,8 @@ namespace GardenWise
             reply = KeepFirstSentences(RemoveThinking(reply), maxSentences, out cut);
             if (reply.Length == 0)
             {
-                // no internet, quota reached, empty answer: the local model takes over, then the tips
-                AskLocalModelOrTip(message, id);
+                // no internet, quota reached, empty answer: the local model takes over
+                AskLocalModelOrGiveUp(message, id);
                 return;
             }
 
@@ -592,8 +584,8 @@ namespace GardenWise
             reply = KeepFirstSentences(RemoveThinking(reply), maxSentences, out cut);
             if (reply.Length == 0)
             {
-                // the model failed: fall back to a tip, and the UI says it is one
-                GiveOfflineTip(id);
+                // the model failed: Gaston says he cannot answer
+                SayUnavailable(id);
                 return;
             }
 
@@ -607,20 +599,20 @@ namespace GardenWise
             Finish(id, reply, GardenerReplySource.LocalModel);
         }
 
-        // pre-written, does not read the question: always shown as an offline tip
-        private void GiveOfflineTip(int id)
+        // no AI could answer: Gaston says so and why, he never makes up a pre-written answer
+        private void SayUnavailable(int id)
         {
-            string[] tips = language == GardenerLanguage.English ? englishTips : frenchTips;
-            if (tips == null || tips.Length == 0)
-            {
-                Finish(id, language == GardenerLanguage.English ? "Gaston has no answer right now." : "Gaston n'a pas de réponse pour l'instant.",
-                    GardenerReplySource.Notice);
-                return;
-            }
+            bool english = language == GardenerLanguage.English;
+            string reason;
+            if (!OnlineConfigured)
+                reason = english ? "the online AI is not set up and the local AI is not ready" : "l'IA en ligne n'est pas configurée et l'IA locale n'est pas prête";
+            else
+                reason = english ? "the online AI does not answer and the local AI is not ready" : "l'IA en ligne ne répond pas et l'IA locale n'est pas prête";
 
-            string tip = tips[nextTip % tips.Length];
-            nextTip++;
-            Finish(id, tip, GardenerReplySource.OfflineTip);
+            string text = english
+                ? "Sorry, I can't think right now: " + reason + ". Try again in a moment!"
+                : "Désolé, je ne peux pas réfléchir pour l'instant : " + reason + ". Réessaie dans un moment !";
+            Finish(id, text, GardenerReplySource.Unavailable);
         }
 
         private void Finish(int id, string reply, GardenerReplySource source)
