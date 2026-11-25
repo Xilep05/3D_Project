@@ -12,6 +12,7 @@ namespace GardenWise
     // - pipeline: 4x MSAA, shadows up to 45 m, HDR, ambient occlusion (SSAO) on the renderer
     // - post-processing profile: soft bloom, neutral tone mapping, a bit more contrast and colour, warm white balance, light vignette
     // - every scene built by GardenWise gets a global Volume and post-processing on its cameras
+    // - when the project targets Android (Meta Quest): no SSAO, no HDR, no post-processing, shorter shadows
     public static class UrpLook
     {
         private const string ProfilePath = "Assets/_Project/Art/Environment/PostFX_Profile.asset";
@@ -38,8 +39,14 @@ namespace GardenWise
             foreach (Camera camera in Object.FindObjectsByType<Camera>(FindObjectsSortMode.None))
             {
                 UniversalAdditionalCameraData data = camera.GetUniversalAdditionalCameraData();
-                data.renderPostProcessing = true;
+                data.renderPostProcessing = !IsQuest();
             }
+        }
+
+        // the Quest renders natively on Android: full-screen effects cost too much there
+        private static bool IsQuest()
+        {
+            return EditorUserBuildSettings.activeBuildTarget == BuildTarget.Android;
         }
 
         private static void ConfigurePipeline()
@@ -52,30 +59,38 @@ namespace GardenWise
                 return;
             }
 
+            bool quest = IsQuest();
             asset.msaaSampleCount = 4;
-            asset.shadowDistance = 45f;
-            asset.supportsHDR = true;
+            asset.shadowDistance = quest ? 20f : 45f;
+            asset.supportsHDR = !quest;
             EditorUtility.SetDirty(asset);
 
             SerializedProperty renderers = new SerializedObject(asset).FindProperty("m_RendererDataList");
             if (renderers != null && renderers.arraySize > 0)
             {
                 ScriptableRendererData data = renderers.GetArrayElementAtIndex(0).objectReferenceValue as ScriptableRendererData;
-                if (data != null) AddAmbientOcclusion(data);
+                if (data != null) SetAmbientOcclusion(data, !quest);
             }
             AssetDatabase.SaveAssets();
         }
 
-        // same steps as the "Add Renderer Feature" button of the renderer asset
-        private static void AddAmbientOcclusion(ScriptableRendererData data)
+        // switches SSAO on (PC) or off (Quest); adds it the same way as the "Add Renderer Feature" button if missing
+        private static void SetAmbientOcclusion(ScriptableRendererData data, bool enabled)
         {
             Type ssaoType = Type.GetType("UnityEngine.Rendering.Universal.ScreenSpaceAmbientOcclusion, Unity.RenderPipelines.Universal.Runtime");
             if (ssaoType == null) return;
 
             foreach (ScriptableRendererFeature existing in data.rendererFeatures)
             {
-                if (existing != null && existing.GetType() == ssaoType) return;
+                if (existing != null && existing.GetType() == ssaoType)
+                {
+                    existing.SetActive(enabled);
+                    EditorUtility.SetDirty(existing);
+                    EditorUtility.SetDirty(data);
+                    return;
+                }
             }
+            if (!enabled) return;
 
             ScriptableRendererFeature feature = (ScriptableRendererFeature)ScriptableObject.CreateInstance(ssaoType);
             feature.name = "ScreenSpaceAmbientOcclusion";
