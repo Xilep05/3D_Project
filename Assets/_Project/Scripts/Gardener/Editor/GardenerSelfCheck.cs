@@ -174,11 +174,9 @@ namespace GardenWise
             GardenerPanel panel = Object.FindAnyObjectByType<GardenerPanel>();
             GardenerVoice voice = Object.FindAnyObjectByType<GardenerVoice>();
             GardenContextBuilder garden = Object.FindAnyObjectByType<GardenContextBuilder>();
-            // the field sits in the bubble, hidden while it is closed: taken from the panel
-            TMP_InputField input = panel != null ? Field<TMP_InputField>(panel, "inputField") : null;
 
-            Check(dialogue != null && panel != null && voice != null && garden != null && input != null,
-                "the scene has Gaston's dialogue, panel, voice, garden context and an input field");
+            Check(dialogue != null && panel != null && voice != null && garden != null,
+                "the scene has Gaston's dialogue, panel, voice and garden context");
             if (failures.Count > 0) return;
 
             RectTransform root = (RectTransform)panel.transform;
@@ -227,7 +225,8 @@ namespace GardenWise
             await WaitUntil(() => bubbleGroup.alpha >= 1f, 3f);
             Check(panel.IsOpen && bubbleGroup.alpha >= 1f && !openHint.activeSelf && voiceGroup.activeSelf && closeKey.text == "Échap",
                 "open: the bubble, the microphone with its V key, and Esc to close");
-            Check(!waiting.activeSelf && !alert.activeSelf && reply.GetParsedText().Contains("Pose-moi une question"), "before any question: Gaston invites the player to ask");
+            Check(!waiting.activeSelf && !alert.activeSelf && reply.GetParsedText().Contains("Maintiens V et pose-moi ta question"), "before any question: Gaston says to hold V and ask");
+            Check(bubbleGroup.GetComponentInChildren<TMP_InputField>(true) == null, "no text field: the player only talks");
             Capture("GardenerSelfCheck_open.png");
 
             // the smallest bubble: one line of text
@@ -246,16 +245,14 @@ namespace GardenWise
             Check(context.Contains("Demain ce sera la canicule") && context.Contains("42 L"), "the context gives tomorrow's weather and the water left");
             Check(context.Contains("santé 2/3") && context.Contains("terre trop sèche (22, idéal 50 à 80). À faire : l'arroser"), "the context gives the health of a plant and what its soil needs");
 
-            // 3. offline: a typed question, exactly as the Enter key sends it
+            // 3. offline: a question, as the voice sends it once understood
             // (the online model, set up or not on this computer, is checked on its own in part 5)
             dialogue.UseOnlineModel = false;
             dialogue.UseLocalModel = false;
             const string firstQuestion = "Pourquoi ma laitue va mal et quand arroser ?";
-            input.text = firstQuestion;
-            input.onSubmit.Invoke(input.text);
+            dialogue.Ask(firstQuestion);
 
             Check(eventsHeard == 1 && lastQuestionHeard == firstQuestion, "GameEvents.GardenerAsked goes out once, with the question");
-            Check(input.text == "", "the input field is emptied after sending");
             Check(reply.maxVisibleCharacters == 0 && panel.ShownLines == 1, "the reply starts hidden and is written letter by letter, from one line");
 
             panel.SkipTypewriter();
@@ -266,7 +263,7 @@ namespace GardenWise
             Check(!waiting.activeSelf && !dialogue.IsAnswering, "no loading icons, dialogue free again");
             Capture("GardenerSelfCheck_offline.png");
 
-            input.onSubmit.Invoke("   ");
+            dialogue.Ask("   ");
             Check(eventsHeard == 1 && dialogue.QuestionCount == 1, "an empty question is not counted and sends no event");
 
             for (int i = 0; i < 12; i++) dialogue.Ask("Question " + i);

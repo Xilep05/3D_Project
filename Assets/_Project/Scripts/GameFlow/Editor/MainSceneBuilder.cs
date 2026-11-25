@@ -223,7 +223,6 @@ namespace GardenWise
             // folded at start (T or the header opens it), and the player walks again after Enter
             GardenerPanel panel = gaston.GetComponent<GardenerPanel>();
             SetBool(panel, "openAtStart", false);
-            SetBool(panel, "keepTypingAfterSend", false);
         }
 
         // ---------- helpers ----------

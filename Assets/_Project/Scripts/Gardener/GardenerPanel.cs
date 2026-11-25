@@ -1,17 +1,16 @@
 using System;
-using System.Collections;
 using System.Text;
 using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace GardenWise
 {
     // owner 5 - Gaston in the top-left corner: his portrait, and under it the key that opens his speech bubble.
     // Open: the bubble (reply written letter by letter, growing line by line, hopping fruits while he thinks,
-    // an alert when the replies are pre-written), a text field, the microphone and its key, and the key that closes it
+    // an alert when the replies are pre-written), the microphone and its key, and the key that closes it.
+    // The player only talks to him: hold the talk key, ask, release
     public class GardenerPanel : MonoBehaviour
     {
         [SerializeField] private GardenerDialogue dialogue;
@@ -33,8 +32,9 @@ namespace GardenWise
         [SerializeField] private int maxLines = 5;
         [Tooltip("Typewriter speed. 0 = the text appears at once.")]
         [SerializeField] private float charactersPerSecond = 45f;
+        [Tooltip("{talk} becomes the name of the talk key.")]
         [TextArea]
-        [SerializeField] private string idleText = "Bonjour ! Pose-moi une question sur ton jardin.";
+        [SerializeField] private string idleText = "Bonjour ! Maintiens [or]{talk}[/or] et pose-moi ta question sur ton jardin.";
 
         [Header("Thinking: hopping fruits and vegetables")]
         [SerializeField] private GameObject waitingGroup;
@@ -52,11 +52,6 @@ namespace GardenWise
         [SerializeField] private Color keywordGreen = new Color32(0x9B, 0xE0, 0x7A, 0xFF);
         [SerializeField] private Color keywordGold = new Color32(0xFF, 0xCC, 0x33, 0xFF);
 
-        [Header("Input")]
-        [SerializeField] private TMP_InputField inputField;
-        [Tooltip("After Enter, the field keeps the focus to type the next question. Off in the game: the player walks again.")]
-        [SerializeField] private bool keepTypingAfterSend = true;
-
         [Header("Microphone (shown only while open)")]
         [SerializeField] private GameObject voiceGroup;
         [SerializeField] private Image micRing;
@@ -64,8 +59,9 @@ namespace GardenWise
         [SerializeField] private Image talkKeyFrame;
 
         [Header("Keys")]
-        [Tooltip("Desktop: a key opens the bubble to type, a key held down to talk, a key closes it.")]
+        [Tooltip("Desktop: a key opens or closes the bubble, a key held down to talk, a key closes it.")]
         [SerializeField] private bool keyboardShortcuts = true;
+        [Tooltip("Opens or closes the bubble.")]
         [SerializeField] private KeyCode typeKey = KeyCode.T;
         [SerializeField] private KeyCode talkKey = KeyCode.V;
         [SerializeField] private KeyCode closeKey = KeyCode.Escape;
@@ -114,7 +110,7 @@ namespace GardenWise
 
             waitingGroup.SetActive(false);
             alertGroup.SetActive(false);
-            SetReply(idleText, false);
+            SetReply(IdleText, false);
             SkipTypewriter();
 
             // hidden with a CanvasGroup, never switched off: the models keep loading and Gaston can still speak
@@ -127,7 +123,6 @@ namespace GardenWise
             dialogue.QuestionAsked += HandleQuestionAsked;
             dialogue.ReplyUpdated += HandleReplyUpdated;
             dialogue.ReplyFinished += HandleReplyFinished;
-            inputField.onSubmit.AddListener(HandleSubmit);
             GameEvents.GameStateChanged += HandleGameStateChanged;
             ShowIfPlaying(GameManager.Instance != null ? GameManager.Instance.State : GameState.Playing);
         }
@@ -137,7 +132,6 @@ namespace GardenWise
             dialogue.QuestionAsked -= HandleQuestionAsked;
             dialogue.ReplyUpdated -= HandleReplyUpdated;
             dialogue.ReplyFinished -= HandleReplyFinished;
-            inputField.onSubmit.RemoveListener(HandleSubmit);
             GameEvents.GameStateChanged -= HandleGameStateChanged;
         }
 
@@ -175,7 +169,6 @@ namespace GardenWise
         public void Close()
         {
             IsOpen = false;
-            if (inputField.isFocused) StopTyping();
         }
 
         public bool IsVisible
@@ -194,8 +187,6 @@ namespace GardenWise
             visibility.alpha = show ? 1f : 0f;
             visibility.interactable = show;
             visibility.blocksRaycasts = show;
-
-            if (!show && inputField.isFocused) StopTyping();
         }
 
         private void UpdatePop()
@@ -222,21 +213,13 @@ namespace GardenWise
 
         // ------------------------------------------------------------------ keyboard (desktop)
 
-        // T: open and type a question (the player stands still while the field has the focus, see DesktopInput)
-        // V held down: talk, released: Gaston listens to what was said. Esc: close
+        // T: open or close the bubble. V held down: talk, released: Gaston listens to what was said. Esc: close
         private void ReadShortcuts()
         {
             if (!IsVisible) return;
 
-            if (Input.GetKeyDown(closeKey) && IsOpen)
-            {
-                Close();
-                return;
-            }
-
-            if (inputField.isFocused) return;
-
-            if (Input.GetKeyDown(typeKey)) StartCoroutine(StartTyping());
+            if (Input.GetKeyDown(closeKey) && IsOpen) Close();
+            else if (Input.GetKeyDown(typeKey)) Toggle();
 
             if (voice == null) return;
             if (Input.GetKeyDown(talkKey))
@@ -253,21 +236,9 @@ namespace GardenWise
             }
         }
 
-        // a frame later, so the key that opened the field is not typed in it
-        private IEnumerator StartTyping()
+        private string IdleText
         {
-            Open();
-            yield return null;
-            if (!inputField.isActiveAndEnabled) yield break;
-            inputField.Select();
-            inputField.ActivateInputField();
-        }
-
-        private void StopTyping()
-        {
-            inputField.DeactivateInputField();
-            if (EventSystem.current != null && EventSystem.current.currentSelectedGameObject == inputField.gameObject)
-                EventSystem.current.SetSelectedGameObject(null);
+            get { return idleText.Replace("{talk}", KeyName(talkKey)); }
         }
 
         private static string KeyName(KeyCode key)
@@ -431,22 +402,7 @@ namespace GardenWise
             return dialogue.Language == GardenerLanguage.English;
         }
 
-        // ------------------------------------------------------------------ keyboard and microphone
-
-        private void HandleSubmit(string text)
-        {
-            dialogue.Ask(text);
-            inputField.text = "";
-            if (!keepTypingAfterSend) StopTyping();
-            else if (isActiveAndEnabled) StartCoroutine(FocusNextFrame());
-        }
-
-        // the field loses the focus right after Enter: take it back so the player can keep typing
-        private IEnumerator FocusNextFrame()
-        {
-            yield return null;
-            if (inputField.isActiveAndEnabled) inputField.ActivateInputField();
-        }
+        // ------------------------------------------------------------------ microphone
 
         // for the microphone button: one click to talk, one click when finished
         public void ToggleMicrophone()
@@ -500,7 +456,7 @@ namespace GardenWise
             {
                 showingVoiceText = false;
                 // nothing was understood: say why instead of leaving "I'm listening" in the bubble
-                SetReply(voice.LastProblem.Length > 0 ? voice.LastProblem : idleText, false);
+                SetReply(voice.LastProblem.Length > 0 ? voice.LastProblem : IdleText, false);
                 SkipTypewriter();
             }
         }

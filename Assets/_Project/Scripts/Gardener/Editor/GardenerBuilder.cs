@@ -209,8 +209,6 @@ namespace GardenWise
                 slots[i].raycastTarget = false;
             }
 
-            TMP_InputField input = AddInputField(inner, "QuestionInput", "Écris ta question…");
-
             // the tail pointing at Gaston covers the frame where it joins the bubble
             Image tailFill = AddSprite(AddRect("TailFill", bubble, -28f, 46f, 32f, 36f), UiFolder + "/tail_fill.png");
             tailFill.color = PanelGreen;
@@ -246,7 +244,6 @@ namespace GardenWise
             SetReferences(panel, "thinkingIcons", LoadSprites(IconsFolder));
             SetReference(panel, "alertGroup", alert.gameObject);
             SetReference(panel, "alertText", alertText);
-            SetReference(panel, "inputField", input);
             SetReference(panel, "voiceGroup", voiceGroup.gameObject);
             SetReference(panel, "micRing", micRing);
             SetReference(panel, "micIcon", micIcon);
@@ -494,53 +491,6 @@ namespace GardenWise
             text.alignment = alignment;
             text.raycastTarget = false;
             return text;
-        }
-
-        // the text field inside the bubble: a thin green line around it, like the bubble's inner line
-        private static TMP_InputField AddInputField(Transform parent, string name, string placeholder)
-        {
-            Sprite line = AssetDatabase.LoadAssetAtPath<Sprite>(UiFolder + "/round_line.png");
-            GameObject inputObject = TMP_DefaultControls.CreateInputField(new TMP_DefaultControls.Resources { inputField = line });
-            inputObject.name = name;
-            foreach (Transform child in inputObject.GetComponentsInChildren<Transform>(true)) child.gameObject.layer = LayerMask.NameToLayer("UI");
-
-            RectTransform rect = (RectTransform)inputObject.transform;
-            rect.SetParent(parent, false);
-            Fixed(inputObject, -1f, 56f);
-
-            Image background = inputObject.GetComponent<Image>();
-            background.sprite = line;
-            background.type = Image.Type.Sliced;
-            background.pixelsPerUnitMultiplier = 2f;
-            background.color = ButtonGreen;
-
-            TMP_InputField input = inputObject.GetComponent<TMP_InputField>();
-            input.lineType = TMP_InputField.LineType.SingleLine;
-            input.characterLimit = 200;
-            input.customCaretColor = true;
-            input.caretColor = BodyText;
-            input.caretWidth = 2;
-            input.selectionColor = new Color32(0x40, 0x85, 0x47, 0xC0);
-
-            TMP_Text text = input.textComponent;
-            TMP_Text placeholderText = (TMP_Text)input.placeholder;
-
-            foreach (TMP_Text field in new[] { text, placeholderText })
-            {
-                if (Regular != null) field.font = Regular;
-                field.fontSize = 24f;
-                field.fontStyle = FontStyles.Normal;
-                field.alignment = TextAlignmentOptions.MidlineLeft;
-            }
-
-            text.color = BodyText;
-            placeholderText.text = placeholder;
-            placeholderText.color = new Color32(0xF5, 0xF5, 0xE8, 0x8C);
-
-            // the default margins are made for a 30 px high field
-            input.textViewport.offsetMin = new Vector2(16f, 4f);
-            input.textViewport.offsetMax = new Vector2(-16f, -4f);
-            return input;
         }
 
         // Inter Regular and SemiBold (Fonts/*.ttf, OFL) as TextMesh Pro fonts, made once: every Latin letter used in
